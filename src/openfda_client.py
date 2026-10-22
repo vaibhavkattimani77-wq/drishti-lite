@@ -13,8 +13,10 @@ from 1,000 to 120,000 requests.
 import json
 import os
 import sqlite3
+import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -111,26 +113,43 @@ class OpenFDAClient:
         self.api_key = api_key or os.environ.get("OPENFDA_API_KEY")
         self._last_call = 0.0
         self.live_calls = 0  # how many requests actually went to openFDA
+        self.reset_tracking()
+
+    # -- which answers were used (for the extraction record) -----------------
+    def reset_tracking(self) -> None:
+        """Start counting the answers used by one analysis."""
+        self.answers_used = 0
+        self.answers_from_cache = 0
+        self.oldest_answer_at: float | None = None   # when the oldest answer was fetched
+        self.newest_answer_at: float | None = None
+
+    def _track(self, fetched_at: float, from_cache: bool) -> None:
+        self.answers_used += 1
+        self.answers_from_cache += int(from_cache)
+        self.oldest_answer_at = min(self.oldest_answer_at or fetched_at, fetched_at)
+        self.newest_answer_at = max(self.newest_answer_at or fetched_at, fetched_at)
 
     # -- cache -------------------------------------------------------------
-    def _from_cache(self, url: str) -> dict | None:
+    def _from_cache(self, url: str) -> tuple[dict, float] | None:
         row = self.db.execute("SELECT body, fetched_at FROM cache WHERE url=?", (url,)).fetchone()
         if row and time.time() - row[1] < config.CACHE_DAYS * 86400:
-            return json.loads(row[0])
+            return json.loads(row[0]), row[1]
         return None
 
-    def _save(self, url: str, body: dict) -> None:
-        self.db.execute(
-            "INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (url, json.dumps(body), time.time())
-        )
+    def _save(self, url: str, body: dict) -> float:
+        now = time.time()
+        self.db.execute("INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (url, json.dumps(body), now))
         self.db.commit()
+        return now
 
     # -- request -----------------------------------------------------------
     def get(self, url: str) -> dict:
         """Return the JSON body. A 'no matches' answer becomes {} (not an error)."""
         cached = self._from_cache(url)
         if cached is not None:
-            return cached
+            body, fetched_at = cached
+            self._track(fetched_at, from_cache=True)
+            return body
 
         full_url = url + (f"&api_key={self.api_key}" if self.api_key else "")
         for attempt in range(4):
@@ -153,7 +172,7 @@ class OpenFDAClient:
         else:
             raise RuntimeError(f"openFDA did not respond after retries: {url}")
 
-        self._save(url, body)
+        self._track(self._save(url, body), from_cache=False)
         return body
 
     # -- the three kinds of question we ask ---------------------------------
@@ -171,3 +190,68 @@ class OpenFDAClient:
     def last_updated(self) -> str:
         body = self.get(build_url([], limit=1))
         return body.get("meta", {}).get("last_updated", "unknown")
+
+
+# ---------------------------------------------------------------------------
+# Extraction record (spec section 3)
+# ---------------------------------------------------------------------------
+
+DRUG_MATCH_FIELD = "patient.drug.openfda.generic_name"
+
+
+def _utc(ts: float | None) -> str | None:
+    return None if ts is None else datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="seconds")
+
+
+def app_version() -> str:
+    """Config version plus the git commit, if git is available."""
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                                text=True, timeout=5, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
+                               capture_output=True, text=True, timeout=5).stdout.strip()
+        return f"{config.APP_VERSION} (commit {commit}{', uncommitted changes' if dirty else ''})"
+    except Exception:
+        return config.APP_VERSION
+
+
+def extraction_record(client: "OpenFDAClient", generic_name: str, filters: Filters,
+                      top_n: int, reactions_analysed: int, totals: dict,
+                      thresholds: dict, dme_version: str,
+                      label_set_id: str | None = None,
+                      label_effective_date: str | None = None) -> dict:
+    """Everything needed to trace a result back to what openFDA returned.
+
+    Call client.reset_tracking() before the analysis and this right after it.
+    """
+    now = datetime.now(timezone.utc)
+    return {
+        "extraction_id": f"EXT-{now:%Y%m%dT%H%M%SZ}-{generic_name.replace(' ', '_')}",
+        "extraction_datetime": now.isoformat(timespec="seconds"),
+        "openfda_last_updated": client.last_updated(),
+        "query_parameters": {
+            "drug_match_field": DRUG_MATCH_FIELD,
+            "generic_name": generic_name,
+            "drug_roles_counted": "any (suspect, concomitant, interacting)",
+            "filters": asdict(filters),
+            "filter_clauses": filters.clauses(),
+            "top_n_reactions": top_n,
+            "thresholds": thresholds,
+        },
+        "counts": {
+            "drug_reports_matched": totals.get("drug_reports"),
+            "database_reports_filtered": totals.get("all_reports"),
+            "reactions_analysed": reactions_analysed,
+        },
+        "api_answers": {
+            "used": client.answers_used,
+            "from_cache": client.answers_from_cache,
+            "oldest_fetched_at": _utc(client.oldest_answer_at),
+            "newest_fetched_at": _utc(client.newest_answer_at),
+            "cache_days": config.CACHE_DAYS,
+        },
+        "label_set_id": label_set_id,
+        "label_effective_date": label_effective_date,
+        "dme_list_version": dme_version,
+        "app_version": app_version(),
+    }
