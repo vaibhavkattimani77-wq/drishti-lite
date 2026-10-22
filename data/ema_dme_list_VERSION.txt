@@ -1,0 +1,8 @@
+Source: European Medicines Agency, Designated Medical Event (DME) list
+Document: EMA/326038/2020, dated 15 June 2020 (Pharmacovigilance Office)
+Terms: 62 MedDRA Preferred Terms
+File received: 2026-10-22 (designated-medical-event-dme-list_en.xlsx)
+EMA note: used to identify reports that deserve special attention irrespective of statistical
+criteria (a safety net so signals are not missed); excludes high-prevalence conditions; may not
+address product-specific issues; not definitive; published for transparency purposes only.
+MedDRA version of the terms is not stated in the file; matching to FAERS PTs is case-insensitive exact match.
