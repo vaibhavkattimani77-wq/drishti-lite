@@ -52,7 +52,7 @@ DISPROPORTIONALITY_NOTE = ("These results show disproportionate reporting, not i
                            "risk or proof that the drug caused the event.")
 
 st.html("""<style>
-.block-container {padding-top: 2.2rem; max-width: 1380px;}
+.block-container {padding-top: 5rem; max-width: 1380px;}
 .dl-drug {font-size: 2.1rem; font-weight: 700; color: #18273A; margin: 0; line-height: 1.15;}
 .dl-meta {color: #52606D; font-size: 0.9rem; margin: 0.25rem 0 1rem 0;}
 .dl-tagline {color: #52606D; font-size: 1.2rem; margin: 0.2rem 0 1.4rem 0;}
