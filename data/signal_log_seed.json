@@ -1,0 +1,894 @@
+[
+  {
+    "signal_id": "SIG-0001",
+    "drug": "ATORVASTATIN",
+    "event": "TYPE 2 DIABETES MELLITUS",
+    "detection_date": "2026-11-11",
+    "created_at": "2026-11-11T13:40:21+00:00",
+    "extraction_id": "EXT-20261111-133803",
+    "snapshot": {
+      "statistics": {
+        "a": 11286,
+        "b": 241112,
+        "c": 22414,
+        "d": 20779347,
+        "n": 21054159,
+        "prr": 41.498736242246345,
+        "prr_lower": 40.58439039920997,
+        "prr_upper": 42.43368183588768,
+        "prr_note": null,
+        "ror": 43.394406043956714,
+        "ror_lower": 42.408742513308766,
+        "ror_upper": 44.40297835562653,
+        "ror_note": null,
+        "chi2": 297121.0197748661,
+        "ic": 4.802326113357521,
+        "ic025": 4.771262096231748,
+        "rules": {
+          "PRR": true,
+          "ROR": true,
+          "IC": true
+        },
+        "rules_met": 3,
+        "small_numbers": false
+      },
+      "extraction": {
+        "extraction_id": "EXT-20261111-133803",
+        "extraction_datetime": "2026-11-11T13:38:03+00:00",
+        "openfda_last_updated": "2026-10-28",
+        "query_parameters": {
+          "drug_match_field": "patient.drug.openfda.generic_name",
+          "generic_name": "ATORVASTATIN",
+          "drug_role": "any (suspect, concomitant or interacting)",
+          "drug_matching": "Phrase match on the harmonised generic name, drug in any role. A phrase match also matches salts (e.g. 'ATORVASTATIN CALCIUM') and combination products that contain the drug (e.g. 'AMLODIPINE BESYLATE AND ATORVASTATIN CALCIUM'); these are included and listed under name_variants. Reports without the harmonised field are not matched.",
+          "event_field": "patient.reaction.reactionmeddrapt.exact",
+          "filters": {
+            "serious_only": false,
+            "outcome": null,
+            "sex": null,
+            "age_group": null,
+            "year_from": null,
+            "year_to": null
+          },
+          "filter_clauses": [],
+          "background_search": [
+            "_exists_:safetyreportid"
+          ],
+          "top_n_reactions": 100,
+          "thresholds": {
+            "prr_min": 2.0,
+            "cases_min": 3,
+            "chi2_min": 4.0,
+            "ror_lower_min": 1.0,
+            "ic025_min": 0.0
+          },
+          "rules": {
+            "PRR rule": "PRR >= 2.0 and a >= 3 and chi2 >= 4.0",
+            "ROR rule": "ROR lower 95% CI > 1.0 and a >= 3",
+            "IC rule": "IC025 > 0.0"
+          }
+        },
+        "dme_list_version": "EMA DME list, EMA/326038/2020, dated 15 June 2020 (Pharmacovigilance Office), 62 PTs",
+        "app_version": "0.1.0-phase1 (git 36f4f7d)",
+        "label_set_id": "4e06b20d-cc5d-46eb-991b-5972248de3af",
+        "label_effective_date": "2026-11-06"
+      },
+      "dme": false,
+      "filters": "none"
+    },
+    "decisions": [
+      {
+        "decision": "Refuted",
+        "rationale": "Disproportionate reporting: 11,286 reports, all three predefined rules met (PRR 41.50 (40.58\u201342.43)). The exact term was not found in the label by text matching, but the atorvastatin label already warns of increases in HbA1c and fasting serum glucose (Warnings and Precautions), so the glycaemic risk is labelled; this is a synonym miss, not a new finding. In the 50 most recent reports atorvastatin was a suspect drug in only 24% and concomitant in most, consistent with statins being widely co-prescribed in people with diabetes (confounding by co-medication and co-morbidity). Reporting is decreasing, 96% of reports are serious and lawyers are among the reporters, which suggests stimulated reporting. No new safety information beyond the labelled risk. Refuted as a new signal; no action beyond routine monitoring.",
+        "reviewer": "vaibhav",
+        "decision_date": "2026-11-11T13:41:04+00:00",
+        "evidence": {
+          "label": {
+            "status": "Not found in searched label text",
+            "section": null,
+            "passage": null,
+            "matched_term": null,
+            "spelling_note": null,
+            "set_id": "4e06b20d-cc5d-46eb-991b-5972248de3af",
+            "label_id": "5f9cbdd6-7e90-45f6-e063-6294a90ac535",
+            "effective_date": "2026-11-06",
+            "product": "ATORVASTATIN CALCIUM",
+            "label_note": null,
+            "sections_searched": [
+              "Warnings and Precautions",
+              "Adverse Reactions"
+            ]
+          },
+          "score": {
+            "total": 7,
+            "band": "Higher",
+            "factors": [
+              {
+                "name": "Label",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "Not found in searched label text",
+                "rationale": "Possibly unexpected if not in the label, but needs confirmation; 'not found' is not the same as 'new'."
+              },
+              {
+                "name": "EMA DME list",
+                "points": 0,
+                "max_points": 2,
+                "evidence": "Not on the list",
+                "rationale": "Event class of known regulatory concern."
+              },
+              {
+                "name": "Fatal outcome",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "144 of 11,286 reports with a fatal outcome",
+                "rationale": "Report-level death; not necessarily caused by the event or the drug."
+              },
+              {
+                "name": "Seriousness",
+                "points": 1,
+                "max_points": 1,
+                "evidence": "11,155 of 11,286 reports serious (99%)",
+                "rationale": "Seriousness pattern (more than half of reports serious)."
+              },
+              {
+                "name": "Rules met",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "3 of 3",
+                "rationale": "Consistency across predefined rules (they share one 2\u00d72 table, so this is consistency, not independent confirmation)."
+              },
+              {
+                "name": "Reporting trend",
+                "points": 0,
+                "max_points": 1,
+                "evidence": "Decreasing reporting",
+                "rationale": "Possible emerging pattern; increases often reflect stimulated reporting."
+              }
+            ]
+          },
+          "seriousness": {
+            "reports": 11286,
+            "serious": 11155,
+            "fatal": 144
+          },
+          "trend": "Decreasing reporting",
+          "case_review": {
+            "retrieved": 50,
+            "total": 11286,
+            "age_median": 61.0,
+            "age_missing_pct": 16.0,
+            "suspect_pct": 24,
+            "serious_pct": 96,
+            "death_flags": 4,
+            "reporters": {
+              "Physician": 19,
+              "Consumer or non-health professional": 15,
+              "Other health professional": 14,
+              "Lawyer": 2
+            },
+            "dechallenge": {
+              "not reported": 50
+            },
+            "rechallenge": {
+              "not reported": 42,
+              "Unknown": 8
+            },
+            "co_suspects": [
+              [
+                "PREDNISONE",
+                9
+              ],
+              [
+                "METFORMIN",
+                9
+              ],
+              [
+                "AMISULPRIDE",
+                8
+              ],
+              [
+                "AMLODIPINE",
+                8
+              ],
+              [
+                "CLOZAPINE",
+                8
+              ]
+            ],
+            "indications": [
+              [
+                "PRODUCT USED FOR UNKNOWN INDICATION",
+                23
+              ],
+              [
+                "BLOOD CHOLESTEROL INCREASED",
+                2
+              ],
+              [
+                "BLOOD CHOLESTEROL DECREASED",
+                1
+              ],
+              [
+                "HYPERTENSION",
+                1
+              ],
+              [
+                "HYPERLIPIDAEMIA",
+                1
+              ]
+            ],
+            "confounding": null
+          }
+        }
+      }
+    ]
+  },
+  {
+    "signal_id": "SIG-0002",
+    "drug": "SEMAGLUTIDE",
+    "event": "OPTIC ISCHAEMIC NEUROPATHY",
+    "detection_date": "2026-11-11",
+    "created_at": "2026-11-11T13:42:24+00:00",
+    "extraction_id": "EXT-20261111-134154",
+    "snapshot": {
+      "statistics": {
+        "a": 838,
+        "b": 77185,
+        "c": 3037,
+        "d": 20973099,
+        "n": 21054159,
+        "prr": 74.18260361083044,
+        "prr_lower": 68.74290349688845,
+        "prr_upper": 80.05275306316787,
+        "prr_note": null,
+        "ror": 74.97714946593021,
+        "ror_lower": 69.4340627888915,
+        "ror_upper": 80.96275396023374,
+        "ror_note": null,
+        "chi2": 47367.80240167177,
+        "ic": 5.818298298961614,
+        "ic025": 5.704253312669026,
+        "rules": {
+          "PRR": true,
+          "ROR": true,
+          "IC": true
+        },
+        "rules_met": 3,
+        "small_numbers": false
+      },
+      "extraction": {
+        "extraction_id": "EXT-20261111-134154",
+        "extraction_datetime": "2026-11-11T13:41:54+00:00",
+        "openfda_last_updated": "2026-10-28",
+        "query_parameters": {
+          "drug_match_field": "patient.drug.openfda.generic_name",
+          "generic_name": "SEMAGLUTIDE",
+          "drug_role": "any (suspect, concomitant or interacting)",
+          "drug_matching": "Phrase match on the harmonised generic name, drug in any role. A phrase match also matches salts (e.g. 'ATORVASTATIN CALCIUM') and combination products that contain the drug (e.g. 'AMLODIPINE BESYLATE AND ATORVASTATIN CALCIUM'); these are included and listed under name_variants. Reports without the harmonised field are not matched.",
+          "event_field": "patient.reaction.reactionmeddrapt.exact",
+          "filters": {
+            "serious_only": false,
+            "outcome": null,
+            "sex": null,
+            "age_group": null,
+            "year_from": null,
+            "year_to": null
+          },
+          "filter_clauses": [],
+          "background_search": [
+            "_exists_:safetyreportid"
+          ],
+          "top_n_reactions": 300,
+          "thresholds": {
+            "prr_min": 2.0,
+            "cases_min": 3,
+            "chi2_min": 4.0,
+            "ror_lower_min": 1.0,
+            "ic025_min": 0.0
+          },
+          "rules": {
+            "PRR rule": "PRR >= 2.0 and a >= 3 and chi2 >= 4.0",
+            "ROR rule": "ROR lower 95% CI > 1.0 and a >= 3",
+            "IC rule": "IC025 > 0.0"
+          }
+        },
+        "dme_list_version": "EMA DME list, EMA/326038/2020, dated 15 June 2020 (Pharmacovigilance Office), 62 PTs",
+        "app_version": "0.1.0-phase1 (git 36f4f7d)",
+        "label_set_id": "42bdd912-2393-44c4-b7e0-47672ca28991",
+        "label_effective_date": "2026-07-30"
+      },
+      "dme": true,
+      "filters": "none"
+    },
+    "decisions": [
+      {
+        "decision": "Potential signal (further evaluation warranted)",
+        "rationale": "Disproportionate reporting: 838 reports, all three predefined rules met, increasing reporting trend; the event is on the EMA Designated Medical Event list. Not found in the US Ozempic label version searched (effective 2026-07-30). In the 50 most recent reports semaglutide was a suspect drug in 100%. No positive dechallenge (16 negative, 34 not reported), but optic nerve ischaemia usually causes permanent damage, so recovery after stopping would not be expected. Limitations: the treated population has diabetes and obesity, themselves risk factors (confounding by indication); 82% of reports are from consumers and reporting may be stimulated by publicity and litigation; age is missing in 38%. External context: the EMA safety committee concluded in 2025 that NAION is a very rare side effect of semaglutide and the EU product information was updated; on 9 November 2026 the FDA required a class-wide GLP-1 label update adding NAION to Warnings and Precautions, so the label searched here predates that change. Further evaluation warranted: review case narratives for ophthalmologist confirmation and time to onset, compare with other GLP-1 receptor agonists, and re-run the label check once the updated US label is published.",
+        "reviewer": "vaibhav",
+        "decision_date": "2026-11-11T13:43:04+00:00",
+        "evidence": {
+          "label": {
+            "status": "Not found in searched label text",
+            "section": null,
+            "passage": null,
+            "matched_term": null,
+            "spelling_note": null,
+            "set_id": "42bdd912-2393-44c4-b7e0-47672ca28991",
+            "label_id": "4b9bdfa7-1075-45cd-baac-66632beb38df",
+            "effective_date": "2026-07-30",
+            "product": "Ozempic, SEMAGLUTIDE",
+            "label_note": null,
+            "sections_searched": [
+              "Boxed Warning",
+              "Warnings and Precautions",
+              "Adverse Reactions"
+            ]
+          },
+          "score": {
+            "total": 8,
+            "band": "Higher",
+            "factors": [
+              {
+                "name": "Label",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "Not found in searched label text",
+                "rationale": "Possibly unexpected if not in the label, but needs confirmation; 'not found' is not the same as 'new'."
+              },
+              {
+                "name": "EMA DME list",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "On the list",
+                "rationale": "Event class of known regulatory concern."
+              },
+              {
+                "name": "Fatal outcome",
+                "points": 0,
+                "max_points": 2,
+                "evidence": "0 of 838 reports with a fatal outcome",
+                "rationale": "Report-level death; not necessarily caused by the event or the drug."
+              },
+              {
+                "name": "Seriousness",
+                "points": 1,
+                "max_points": 1,
+                "evidence": "831 of 838 reports serious (99%)",
+                "rationale": "Seriousness pattern (more than half of reports serious)."
+              },
+              {
+                "name": "Rules met",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "3 of 3",
+                "rationale": "Consistency across predefined rules (they share one 2\u00d72 table, so this is consistency, not independent confirmation)."
+              },
+              {
+                "name": "Reporting trend",
+                "points": 1,
+                "max_points": 1,
+                "evidence": "Increasing reporting",
+                "rationale": "Possible emerging pattern; increases often reflect stimulated reporting."
+              }
+            ]
+          },
+          "seriousness": {
+            "reports": 838,
+            "serious": 831,
+            "fatal": 0
+          },
+          "trend": "Increasing reporting",
+          "case_review": {
+            "retrieved": 50,
+            "total": 838,
+            "age_median": 58.0,
+            "age_missing_pct": 38.0,
+            "suspect_pct": 100,
+            "serious_pct": 100,
+            "death_flags": 0,
+            "reporters": {
+              "Consumer or non-health professional": 41,
+              "Physician": 5,
+              "Other health professional": 2,
+              "Pharmacist": 1,
+              "Lawyer": 1
+            },
+            "dechallenge": {
+              "not reported": 34,
+              "Negative (derived)": 16
+            },
+            "rechallenge": {
+              "not reported": 43,
+              "Unknown": 7
+            },
+            "co_suspects": [
+              [
+                "TIRZEPATIDE",
+                2
+              ]
+            ],
+            "indications": [
+              [
+                "TYPE 2 DIABETES MELLITUS",
+                40
+              ],
+              [
+                "WEIGHT CONTROL",
+                11
+              ],
+              [
+                "CARDIOVASCULAR EVENT PROPHYLAXIS",
+                8
+              ],
+              [
+                "PRODUCT USED FOR UNKNOWN INDICATION",
+                4
+              ],
+              [
+                "DIABETES MELLITUS",
+                3
+              ]
+            ],
+            "confounding": null
+          }
+        }
+      }
+    ]
+  },
+  {
+    "signal_id": "SIG-0003",
+    "drug": "ATORVASTATIN",
+    "event": "BLOOD CHOLESTEROL INCREASED",
+    "detection_date": "2026-11-11",
+    "created_at": "2026-11-11T13:43:55+00:00",
+    "extraction_id": "EXT-20261111-134323",
+    "snapshot": {
+      "statistics": {
+        "a": 3221,
+        "b": 249177,
+        "c": 43442,
+        "d": 20758319,
+        "n": 21054159,
+        "prr": 6.110758303831349,
+        "prr_lower": 5.897179682649959,
+        "prr_upper": 6.332072118763059,
+        "prr_note": null,
+        "ror": 6.176822798133154,
+        "ror_lower": 5.958353751861127,
+        "ror_upper": 6.403302232201324,
+        "ror_note": null,
+        "chi2": 12841.148906610337,
+        "ic": 2.5244974661317854,
+        "ic025": 2.4663452100745897,
+        "rules": {
+          "PRR": true,
+          "ROR": true,
+          "IC": true
+        },
+        "rules_met": 3,
+        "small_numbers": false
+      },
+      "extraction": {
+        "extraction_id": "EXT-20261111-134323",
+        "extraction_datetime": "2026-11-11T13:43:23+00:00",
+        "openfda_last_updated": "2026-10-28",
+        "query_parameters": {
+          "drug_match_field": "patient.drug.openfda.generic_name",
+          "generic_name": "ATORVASTATIN",
+          "drug_role": "any (suspect, concomitant or interacting)",
+          "drug_matching": "Phrase match on the harmonised generic name, drug in any role. A phrase match also matches salts (e.g. 'ATORVASTATIN CALCIUM') and combination products that contain the drug (e.g. 'AMLODIPINE BESYLATE AND ATORVASTATIN CALCIUM'); these are included and listed under name_variants. Reports without the harmonised field are not matched.",
+          "event_field": "patient.reaction.reactionmeddrapt.exact",
+          "filters": {
+            "serious_only": false,
+            "outcome": null,
+            "sex": null,
+            "age_group": null,
+            "year_from": null,
+            "year_to": null
+          },
+          "filter_clauses": [],
+          "background_search": [
+            "_exists_:safetyreportid"
+          ],
+          "top_n_reactions": 100,
+          "thresholds": {
+            "prr_min": 2.0,
+            "cases_min": 3,
+            "chi2_min": 4.0,
+            "ror_lower_min": 1.0,
+            "ic025_min": 0.0
+          },
+          "rules": {
+            "PRR rule": "PRR >= 2.0 and a >= 3 and chi2 >= 4.0",
+            "ROR rule": "ROR lower 95% CI > 1.0 and a >= 3",
+            "IC rule": "IC025 > 0.0"
+          }
+        },
+        "dme_list_version": "EMA DME list, EMA/326038/2020, dated 15 June 2020 (Pharmacovigilance Office), 62 PTs",
+        "app_version": "0.1.0-phase1 (git 36f4f7d)",
+        "label_set_id": "4e06b20d-cc5d-46eb-991b-5972248de3af",
+        "label_effective_date": "2026-11-06"
+      },
+      "dme": false,
+      "filters": "none"
+    },
+    "decisions": [
+      {
+        "decision": "Refuted",
+        "rationale": "Disproportionate reporting: 3,221 reports, all three predefined rules met (statistics frozen in this entry). The term was not found in the atorvastatin label, as expected: raised blood cholesterol is the condition atorvastatin is used to treat, not an adverse reaction. Case review supports confounding by indication: in the 50 most recent reports the reported indication for atorvastatin was blood cholesterol increased itself, and atorvastatin was a suspect drug in only 22%. These reports most likely describe the underlying disease or insufficient lipid lowering (lack of effect) rather than a harm caused by the drug. No plausible mechanism for atorvastatin raising cholesterol. Refuted as an adverse reaction signal; lack-of-effect reports would be handled as a separate efficacy or product-quality question if a pattern were seen.",
+        "reviewer": "vaibhav",
+        "decision_date": "2026-11-11T13:44:24+00:00",
+        "evidence": {
+          "label": {
+            "status": "Not found in searched label text",
+            "section": null,
+            "passage": null,
+            "matched_term": null,
+            "spelling_note": null,
+            "set_id": "4e06b20d-cc5d-46eb-991b-5972248de3af",
+            "label_id": "5f9cbdd6-7e90-45f6-e063-6294a90ac535",
+            "effective_date": "2026-11-06",
+            "product": "ATORVASTATIN CALCIUM",
+            "label_note": null,
+            "sections_searched": [
+              "Warnings and Precautions",
+              "Adverse Reactions"
+            ]
+          },
+          "score": {
+            "total": 7,
+            "band": "Higher",
+            "factors": [
+              {
+                "name": "Label",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "Not found in searched label text",
+                "rationale": "Possibly unexpected if not in the label, but needs confirmation; 'not found' is not the same as 'new'."
+              },
+              {
+                "name": "EMA DME list",
+                "points": 0,
+                "max_points": 2,
+                "evidence": "Not on the list",
+                "rationale": "Event class of known regulatory concern."
+              },
+              {
+                "name": "Fatal outcome",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "45 of 3,221 reports with a fatal outcome",
+                "rationale": "Report-level death; not necessarily caused by the event or the drug."
+              },
+              {
+                "name": "Seriousness",
+                "points": 1,
+                "max_points": 1,
+                "evidence": "2,224 of 3,221 reports serious (69%)",
+                "rationale": "Seriousness pattern (more than half of reports serious)."
+              },
+              {
+                "name": "Rules met",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "3 of 3",
+                "rationale": "Consistency across predefined rules (they share one 2\u00d72 table, so this is consistency, not independent confirmation)."
+              },
+              {
+                "name": "Reporting trend",
+                "points": 0,
+                "max_points": 1,
+                "evidence": "No substantial change",
+                "rationale": "Possible emerging pattern; increases often reflect stimulated reporting."
+              }
+            ]
+          },
+          "seriousness": {
+            "reports": 3221,
+            "serious": 2224,
+            "fatal": 45
+          },
+          "trend": "No substantial change",
+          "case_review": {
+            "retrieved": 50,
+            "total": 3221,
+            "age_median": 62.5,
+            "age_missing_pct": 24.0,
+            "suspect_pct": 22,
+            "serious_pct": 68,
+            "death_flags": 1,
+            "reporters": {
+              "Consumer or non-health professional": 28,
+              "Other health professional": 12,
+              "Physician": 10
+            },
+            "dechallenge": {
+              "not reported": 49,
+              "Negative (derived)": 1
+            },
+            "rechallenge": {
+              "not reported": 45,
+              "Unknown": 5
+            },
+            "co_suspects": [
+              [
+                "WARFARIN",
+                5
+              ],
+              [
+                "TOCILIZUMAB",
+                5
+              ],
+              [
+                "SARILUMAB",
+                4
+              ],
+              [
+                "AMIODARONE",
+                3
+              ],
+              [
+                "APIXABAN",
+                3
+              ]
+            ],
+            "indications": [
+              [
+                "PRODUCT USED FOR UNKNOWN INDICATION",
+                23
+              ],
+              [
+                "BLOOD CHOLESTEROL INCREASED",
+                6
+              ],
+              [
+                "HYPOTHYROIDISM",
+                1
+              ],
+              [
+                "ILL-DEFINED DISORDER",
+                1
+              ],
+              [
+                "BLOOD CHOLESTEROL DECREASED",
+                1
+              ]
+            ],
+            "confounding": "BLOOD CHOLESTEROL INCREASED"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "signal_id": "SIG-0004",
+    "drug": "CLOZAPINE",
+    "event": "AGRANULOCYTOSIS",
+    "detection_date": "2026-11-11",
+    "created_at": "2026-11-11T14:27:32+00:00",
+    "extraction_id": "EXT-20261111-142518",
+    "snapshot": {
+      "statistics": {
+        "a": 2086,
+        "b": 124388,
+        "c": 16519,
+        "d": 20911166,
+        "n": 21054159,
+        "prr": 20.895390242801945,
+        "prr_lower": 19.971819966102302,
+        "prr_upper": 21.861669799749997,
+        "prr_note": null,
+        "ror": 21.22903805486167,
+        "ror_lower": 20.276997695208422,
+        "ror_upper": 22.22577836763584,
+        "ror_note": null,
+        "chi2": 35098.35450956539,
+        "ic": 4.216147101309189,
+        "ic025": 4.143881624001579,
+        "rules": {
+          "PRR": true,
+          "ROR": true,
+          "IC": true
+        },
+        "rules_met": 3,
+        "small_numbers": false
+      },
+      "extraction": {
+        "extraction_id": "EXT-20261111-142518",
+        "extraction_datetime": "2026-11-11T14:25:18+00:00",
+        "openfda_last_updated": "2026-10-28",
+        "query_parameters": {
+          "drug_match_field": "patient.drug.openfda.generic_name",
+          "generic_name": "CLOZAPINE",
+          "drug_role": "any (suspect, concomitant or interacting)",
+          "drug_matching": "Phrase match on the harmonised generic name, drug in any role. A phrase match also matches salts (e.g. 'ATORVASTATIN CALCIUM') and combination products that contain the drug (e.g. 'AMLODIPINE BESYLATE AND ATORVASTATIN CALCIUM'); these are included and listed under name_variants. Reports without the harmonised field are not matched.",
+          "event_field": "patient.reaction.reactionmeddrapt.exact",
+          "filters": {
+            "serious_only": false,
+            "outcome": null,
+            "sex": null,
+            "age_group": null,
+            "year_from": null,
+            "year_to": null
+          },
+          "filter_clauses": [],
+          "background_search": [
+            "_exists_:safetyreportid"
+          ],
+          "top_n_reactions": 100,
+          "thresholds": {
+            "prr_min": 2.0,
+            "cases_min": 3,
+            "chi2_min": 4.0,
+            "ror_lower_min": 1.0,
+            "ic025_min": 0.0
+          },
+          "rules": {
+            "PRR rule": "PRR >= 2.0 and a >= 3 and chi2 >= 4.0",
+            "ROR rule": "ROR lower 95% CI > 1.0 and a >= 3",
+            "IC rule": "IC025 > 0.0"
+          }
+        },
+        "dme_list_version": "EMA DME list, EMA/326038/2020, dated 15 June 2020 (Pharmacovigilance Office), 62 PTs",
+        "app_version": "0.1.0-phase1 (git 36f4f7d)",
+        "label_set_id": "2592c9a8-fd74-4e0d-a895-b07b014cf355",
+        "label_effective_date": "2026-09-06"
+      },
+      "dme": true,
+      "filters": "none"
+    },
+    "decisions": [
+      {
+        "decision": "Potential signal (further evaluation warranted)",
+        "rationale": "Clozapine-associated agranulocytosis demonstrates strong disproportionality, meeting all three predefined statistical screening criteria (PRR, ROR and IC025). However, agranulocytosis is an established and labelled adverse reaction and is included in the EMA Designated Medical Event list. The high proportion of serious reports reinforces its clinical importance. The reporting trend is decreasing, and spontaneous reporting data cannot establish causality or incidence. No evidence of a new safety concern is established from the available review. Therefore, the association is classified as Monitoring rather than a new potential signal.",
+        "reviewer": "vaibhav",
+        "decision_date": "2026-11-11T14:30:21+00:00",
+        "evidence": {
+          "label": {
+            "status": "Labelled",
+            "section": "Adverse Reactions",
+            "passage": "Hemic and Lymphatic System Mild, moderate, or severe leukopenia, agranulocytosis, granulocytopenia, WBC decreased, deep vein thrombosis, elevated hemoglobin/hematocrit, erythrocyte sedimentation rate (ESR) increased, sepsis, thrombocytosis, and thrombocytopenia.",
+            "matched_term": "agranulocytosis",
+            "spelling_note": null,
+            "set_id": "2592c9a8-fd74-4e0d-a895-b07b014cf355",
+            "label_id": "5ad93201-28d4-44d3-e063-6394a90ab9da",
+            "effective_date": "2026-09-06",
+            "product": "VERSACLOZ, CLOZAPINE",
+            "label_note": null,
+            "sections_searched": [
+              "Boxed Warning",
+              "Warnings and Precautions",
+              "Adverse Reactions"
+            ]
+          },
+          "score": {
+            "total": 7,
+            "band": "Higher",
+            "factors": [
+              {
+                "name": "Label",
+                "points": 0,
+                "max_points": 2,
+                "evidence": "Labelled",
+                "rationale": "Possibly unexpected if not in the label, but needs confirmation; 'not found' is not the same as 'new'."
+              },
+              {
+                "name": "EMA DME list",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "On the list",
+                "rationale": "Event class of known regulatory concern."
+              },
+              {
+                "name": "Fatal outcome",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "129 of 2,086 reports with a fatal outcome",
+                "rationale": "Report-level death; not necessarily caused by the event or the drug."
+              },
+              {
+                "name": "Seriousness",
+                "points": 1,
+                "max_points": 1,
+                "evidence": "2,070 of 2,086 reports serious (99%)",
+                "rationale": "Seriousness pattern (more than half of reports serious)."
+              },
+              {
+                "name": "Rules met",
+                "points": 2,
+                "max_points": 2,
+                "evidence": "3 of 3",
+                "rationale": "Consistency across predefined rules (they share one 2\u00d72 table, so this is consistency, not independent confirmation)."
+              },
+              {
+                "name": "Reporting trend",
+                "points": 0,
+                "max_points": 1,
+                "evidence": "Decreasing reporting",
+                "rationale": "Possible emerging pattern; increases often reflect stimulated reporting."
+              }
+            ]
+          },
+          "seriousness": {
+            "reports": 2086,
+            "serious": 2070,
+            "fatal": 129
+          },
+          "trend": "Decreasing reporting",
+          "case_review": {
+            "retrieved": 50,
+            "total": 2086,
+            "age_median": 49.0,
+            "age_missing_pct": 26.0,
+            "suspect_pct": 96,
+            "serious_pct": 96,
+            "death_flags": 3,
+            "reporters": {
+              "Physician": 17,
+              "Pharmacist": 14,
+              "Other health professional": 13,
+              "Consumer or non-health professional": 6
+            },
+            "dechallenge": {
+              "not reported": 32,
+              "Positive (derived)": 16,
+              "Negative (derived)": 2
+            },
+            "rechallenge": {
+              "not reported": 35,
+              "Unknown": 11,
+              "Positive (reaction recurred)": 3,
+              "Negative (did not recur)": 1
+            },
+            "co_suspects": [
+              [
+                "OLANZAPINE",
+                5
+              ],
+              [
+                "LITHIUM",
+                3
+              ],
+              [
+                "RISPERIDONE",
+                3
+              ],
+              [
+                "SULFAMETHOXAZOLE AND TRIMETHOPRIM",
+                3
+              ],
+              [
+                "BORTEZOMIB",
+                3
+              ]
+            ],
+            "indications": [
+              [
+                "SCHIZOPHRENIA",
+                22
+              ],
+              [
+                "PRODUCT USED FOR UNKNOWN INDICATION",
+                13
+              ],
+              [
+                "SCHIZOAFFECTIVE DISORDER",
+                5
+              ],
+              [
+                "PSYCHOTIC DISORDER",
+                5
+              ],
+              [
+                "PARKINSON^S DISEASE PSYCHOSIS",
+                2
+              ]
+            ],
+            "confounding": null
+          }
+        }
+      }
+    ]
+  }
+]
