@@ -1,0 +1,30 @@
+# DRISHTI-lite visual theme.
+# Public Sans is the US Web Design System typeface; the data come from the FDA.
+# Signal scale (rules met 0-3), used in the table, detail panel and forest plot:
+#   0 #C5CDD6  1 #E0A526  2 #D9732B  3 #B3261E
+
+[theme]
+base = "light"
+primaryColor = "#1F4E79"
+backgroundColor = "#F6F8FA"
+secondaryBackgroundColor = "#E9EEF3"
+textColor = "#18273A"
+linkColor = "#1F4E79"
+borderColor = "#D3DAE2"
+showWidgetBorder = true
+baseRadius = "4px"
+buttonRadius = "4px"
+font = "Public Sans:https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Public Sans:https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap, sans-serif"
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+metricValueFontWeight = 600
+dataframeHeaderBackgroundColor = "#E9EEF3"
+dataframeBorderColor = "#D3DAE2"
+chartCategoricalColors = ["#1F4E79", "#D9732B", "#5B8DB8", "#B3261E", "#E0A526", "#7A8794"]
+
+[theme.sidebar]
+backgroundColor = "#EDF1F5"
+secondaryBackgroundColor = "#FFFFFF"
+
+[client]
+toolbarMode = "minimal"

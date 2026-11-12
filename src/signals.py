@@ -1,229 +1,288 @@
-"""Disproportionality statistics for spontaneous adverse event reports (spec section 4).
+"""Disproportionality statistics for spontaneous reports (spec §4).
 
 The 2x2 table for one drug and one event (counts are numbers of REPORTS):
 
-                     Event         All other events
-    Drug                a                 b
-    All other drugs     c                 d
+                     Event      All other events    Total
+    Drug               a               b             a+b
+    All other drugs    c               d             c+d
+    Total             a+c             b+d             N
 
-    a = reports with the drug and the event
-    b = reports with the drug but not the event
-    c = reports with the event but not the drug
-    d = reports with neither          N = a + b + c + d
+    PRR  = [a/(a+b)] / [c/(c+d)]        95% CI: exp(ln PRR +/- 1.96*SE)
+           SE = sqrt(1/a - 1/(a+b) + 1/c - 1/(c+d))
+    ROR  = (a*d) / (b*c)                95% CI: exp(ln ROR +/- 1.96*SE)
+           SE = sqrt(1/a + 1/b + 1/c + 1/d)
+    chi2 = Yates-corrected, 1 df:
+           N * (max(|ad - bc| - N/2, 0))^2 / [(a+b)(c+d)(a+c)(b+d)]
+    IC   = log2[(a + 0.5) / (E + 0.5)],  E = (a+b)(a+c)/N
+    IC025 ~= IC - 3.3*(a+0.5)^-1/2 - 2*(a+0.5)^-3/2
+           (Noren, Hopstadius & Bate, Stat Methods Med Res 2013;22:57-69)
 
-PRR = [a/(a+b)] / [c/(c+d)]            95% CI: exp(ln PRR +/- 1.96*SE),
-                                       SE = sqrt(1/a - 1/(a+b) + 1/c - 1/(c+d))
-ROR = (a*d) / (b*c)                    95% CI: exp(ln ROR +/- 1.96*SE),
-                                       SE = sqrt(1/a + 1/b + 1/c + 1/d)
-Chi-square, Yates-corrected, 1 df:     N * (|ad - bc| - N/2)^2 / [(a+b)(c+d)(a+c)(b+d)]
-                                       (|ad - bc| - N/2 is set to 0 if negative)
-IC  = log2[(a + 0.5) / (E + 0.5)],     E = (a+b)(a+c)/N  (expected count)
-IC025 ~ IC - 3.3(a+0.5)^-1/2 - 2(a+0.5)^-3/2
-    Noren GN, Hopstadius J, Bate A. Stat Methods Med Res 2013;22(1):57-69.
-    The +0.5 terms shrink small counts towards "no association" (IC = 0).
+Zero cells (no continuity correction):
+  * PRR needs a > 0 and c > 0 (b = 0 or d = 0 still gives a valid PRR and CI).
+  * ROR needs all four cells > 0.
+  * IC is always computed; the +0.5 terms shrink small counts towards
+    "no association".
 
-Zero cells: if any of a, b, c, d is 0, PRR and ROR are reported as
-"not computable" with the reason. No continuity correction is applied.
-IC is still computed (the shrinkage handles a = 0).
-
-These statistics measure disproportionate reporting. They do not show causation.
+Chi-square note: the max(..., 0) stops the Yates correction from producing a
+positive value when |ad - bc| < N/2 (i.e. when there is essentially no
+association). Use MAX(ABS(a*d-b*c)-N/2, 0) in the Excel reference check too.
 """
+
+from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 
 from src import config
 
-NAN = float("nan")
-Z95 = 1.96
-
 
 # ---------------------------------------------------------------------------
-# Thresholds for the predefined rules (defaults come from config.py)
+# Data structures
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class Thresholds:
-    prr_min: float = config.PRR_MIN
-    prr_cases_min: int = config.PRR_CASES_MIN
-    chi2_min: float = config.CHI2_MIN
-    ror_lower_min: float = config.ROR_LOWER_MIN
-    ror_cases_min: int = config.ROR_CASES_MIN
-    ic025_min: float = config.IC025_MIN
-    small_numbers_below: int = config.SMALL_NUMBERS_BELOW
-
-
-# ---------------------------------------------------------------------------
-# The 2x2 table
-# ---------------------------------------------------------------------------
-
-def two_by_two(drug_reaction: int, drug_total: int,
-               reaction_total: int, all_total: int) -> tuple[int, int, int, int]:
-    """Turn the four openFDA counts into the a, b, c, d cells.
-
-    drug_reaction = a, drug_total = a+b, reaction_total = a+c, all_total = N.
-    Raises ValueError if the counts are inconsistent (a negative cell).
-    """
-    a = drug_reaction
-    b = drug_total - drug_reaction
-    c = reaction_total - drug_reaction
-    d = all_total - drug_total - reaction_total + drug_reaction
-    if min(a, b, c, d) < 0:
-        raise ValueError(
-            f"Inconsistent counts give a negative cell: a={a}, b={b}, c={c}, d={d}"
-        )
-    return a, b, c, d
-
-
-def zero_cell_note(a: int, b: int, c: int, d: int) -> str:
-    """'' if all cells are above 0, else e.g. 'not computable (a = 0)'."""
-    zeros = [f"{name} = 0" for name, v in zip("abcd", (a, b, c, d)) if v == 0]
-    return f"not computable ({', '.join(zeros)})" if zeros else ""
-
-
-# ---------------------------------------------------------------------------
-# The measures
-# ---------------------------------------------------------------------------
-
-def prr(a: int, b: int, c: int, d: int, z: float = Z95) -> tuple[float, float, float]:
-    """PRR with 95% CI. (NaN, NaN, NaN) if any cell is 0."""
-    if zero_cell_note(a, b, c, d):
-        return NAN, NAN, NAN
-    value = (a / (a + b)) / (c / (c + d))
-    se = math.sqrt(1 / a - 1 / (a + b) + 1 / c - 1 / (c + d))
-    return value, math.exp(math.log(value) - z * se), math.exp(math.log(value) + z * se)
-
-
-def ror(a: int, b: int, c: int, d: int, z: float = Z95) -> tuple[float, float, float]:
-    """ROR with 95% CI. (NaN, NaN, NaN) if any cell is 0."""
-    if zero_cell_note(a, b, c, d):
-        return NAN, NAN, NAN
-    value = (a * d) / (b * c)
-    se = math.sqrt(1 / a + 1 / b + 1 / c + 1 / d)
-    return value, math.exp(math.log(value) - z * se), math.exp(math.log(value) + z * se)
-
-
-def chi_square_yates(a: int, b: int, c: int, d: int) -> float:
-    """Yates-corrected chi-square, 1 df. NaN if a row or column total is 0."""
-    n = a + b + c + d
-    denom = (a + b) * (c + d) * (a + c) * (b + d)
-    if denom == 0:
-        return NAN
-    diff = max(abs(a * d - b * c) - n / 2, 0)
-    return n * diff ** 2 / denom
-
-
-def expected_count(a: int, b: int, c: int, d: int) -> float:
-    """E = (a+b)(a+c)/N: reports expected if drug and event were unrelated."""
-    n = a + b + c + d
-    return NAN if n == 0 else (a + b) * (a + c) / n
-
-
-def information_component(a: int, b: int, c: int, d: int) -> tuple[float, float]:
-    """IC and IC025 (Noren et al. 2013 approximation). Works when a = 0."""
-    e = expected_count(a, b, c, d)
-    if math.isnan(e):
-        return NAN, NAN
-    ic = math.log2((a + 0.5) / (e + 0.5))
-    ic025 = ic - 3.3 * (a + 0.5) ** -0.5 - 2 * (a + 0.5) ** -1.5
-    return ic, ic025
-
-
-# ---------------------------------------------------------------------------
-# One full result per drug-event pair
-# ---------------------------------------------------------------------------
-
-@dataclass
-class SignalResult:
+class TwoByTwo:
     a: int
     b: int
     c: int
     d: int
-    prr: float
-    prr_lower: float
-    prr_upper: float
-    ror: float
-    ror_lower: float
-    ror_upper: float
-    chi2: float
-    expected: float
-    ic: float
-    ic025: float
-    ratio_note: str        # '' or 'not computable (<cell> = 0)', applies to PRR and ROR
-    prr_rule: bool
-    ror_rule: bool
-    ic_rule: bool
-    small_numbers: bool    # a below the small-numbers threshold
-
-    @property
-    def rules_met(self) -> int:
-        return int(self.prr_rule) + int(self.ror_rule) + int(self.ic_rule)
 
     @property
     def n(self) -> int:
         return self.a + self.b + self.c + self.d
 
+    @property
+    def drug_total(self) -> int:       # a + b
+        return self.a + self.b
 
-def _ok(x: float) -> bool:
-    return not math.isnan(x)
+    @property
+    def other_total(self) -> int:      # c + d
+        return self.c + self.d
+
+    @property
+    def event_total(self) -> int:      # a + c
+        return self.a + self.c
+
+    @property
+    def non_event_total(self) -> int:  # b + d
+        return self.b + self.d
+
+    def first_zero_cell(self) -> str | None:
+        for name in ("a", "b", "c", "d"):
+            if getattr(self, name) == 0:
+                return name
+        return None
 
 
-def apply_rules(a: int, prr_value: float, chi2: float, ror_lower: float,
-                ic025: float, t: Thresholds) -> tuple[bool, bool, bool]:
-    """The three predefined rules. A measure that is not computable fails its rule."""
-    prr_rule = (_ok(prr_value) and _ok(chi2) and prr_value >= t.prr_min
-                and a >= t.prr_cases_min and chi2 >= t.chi2_min)
-    ror_rule = _ok(ror_lower) and ror_lower > t.ror_lower_min and a >= t.ror_cases_min
-    ic_rule = _ok(ic025) and ic025 > t.ic025_min
-    return prr_rule, ror_rule, ic_rule
+@dataclass(frozen=True)
+class Estimate:
+    """A ratio with its 95% interval, or a reason it could not be computed."""
+    value: float | None
+    lower: float | None
+    upper: float | None
+    note: str | None = None          # e.g. "not computable (b = 0)"
+
+    @property
+    def computable(self) -> bool:
+        return self.value is not None
 
 
-def analyse(drug_reaction: int, drug_total: int, reaction_total: int, all_total: int,
-            thresholds: Thresholds = Thresholds()) -> SignalResult:
-    """Full calculation for one drug-event pair from the four openFDA counts."""
-    a, b, c, d = two_by_two(drug_reaction, drug_total, reaction_total, all_total)
-    p, pl, pu = prr(a, b, c, d)
-    r, rl, ru = ror(a, b, c, d)
-    chi2 = chi_square_yates(a, b, c, d)
-    ic, ic025 = information_component(a, b, c, d)
-    prr_rule, ror_rule, ic_rule = apply_rules(a, p, chi2, rl, ic025, thresholds)
+@dataclass(frozen=True)
+class Thresholds:
+    prr_min: float = config.PRR_MIN
+    cases_min: int = config.CASES_MIN
+    chi2_min: float = config.CHI2_MIN
+    ror_lower_min: float = config.ROR_LOWER_MIN
+    ic025_min: float = config.IC025_MIN
+
+    def as_dict(self) -> dict:
+        return {
+            "PRR rule": f"PRR >= {self.prr_min} and a >= {self.cases_min} and chi2 >= {self.chi2_min}",
+            "ROR rule": f"ROR lower 95% CI > {self.ror_lower_min} and a >= {self.cases_min}",
+            "IC rule": f"IC025 > {self.ic025_min}",
+        }
+
+
+@dataclass(frozen=True)
+class RulesMet:
+    prr: bool
+    ror: bool
+    ic: bool
+
+    @property
+    def count(self) -> int:
+        return int(self.prr) + int(self.ror) + int(self.ic)
+
+    @property
+    def label(self) -> str:
+        return f"{self.count} of 3"
+
+
+@dataclass(frozen=True)
+class SignalResult:
+    table: TwoByTwo
+    prr: Estimate
+    ror: Estimate
+    chi2: float | None
+    ic: float | None
+    ic025: float | None
+    rules: RulesMet
+    small_numbers: bool
+
+
+# ---------------------------------------------------------------------------
+# 2x2 table
+# ---------------------------------------------------------------------------
+
+def two_by_two(drug_event: int, drug_total: int, event_total: int, all_total: int) -> TwoByTwo:
+    """Build the 2x2 table from the four counts openFDA returns.
+
+    drug_event = a, drug_total = a+b, event_total = a+c, all_total = N.
+    Raises ValueError if the counts are inconsistent (a negative cell).
+    """
+    a = drug_event
+    b = drug_total - drug_event
+    c = event_total - drug_event
+    d = all_total - drug_total - event_total + drug_event
+    if min(a, b, c, d) < 0:
+        raise ValueError(
+            f"Inconsistent openFDA counts give a negative cell (a={a}, b={b}, c={c}, d={d}); "
+            "calculation stopped for this pair."
+        )
+    return TwoByTwo(a, b, c, d)
+
+
+# ---------------------------------------------------------------------------
+# Measures
+# ---------------------------------------------------------------------------
+
+def _not_computable(t: TwoByTwo, cells: tuple[str, ...]) -> Estimate | None:
+    for name in cells:
+        if getattr(t, name) == 0:
+            return Estimate(None, None, None, f"not computable ({name} = 0)")
+    return None
+
+
+def prr(t: TwoByTwo, z: float = config.Z_95) -> Estimate:
+    """Proportional reporting ratio with 95% CI. Needs a > 0 and c > 0."""
+    if (nc := _not_computable(t, ("a", "c"))) is not None:
+        return nc
+    a, b, c, d = t.a, t.b, t.c, t.d
+    value = (a / (a + b)) / (c / (c + d))
+    se = math.sqrt(1 / a - 1 / (a + b) + 1 / c - 1 / (c + d))
+    return Estimate(value, math.exp(math.log(value) - z * se), math.exp(math.log(value) + z * se))
+
+
+def ror(t: TwoByTwo, z: float = config.Z_95) -> Estimate:
+    """Reporting odds ratio with 95% CI. Needs all four cells > 0."""
+    if (nc := _not_computable(t, ("a", "b", "c", "d"))) is not None:
+        return nc
+    a, b, c, d = t.a, t.b, t.c, t.d
+    value = (a * d) / (b * c)
+    se = math.sqrt(1 / a + 1 / b + 1 / c + 1 / d)
+    return Estimate(value, math.exp(math.log(value) - z * se), math.exp(math.log(value) + z * se))
+
+
+def chi_square_yates(t: TwoByTwo) -> float | None:
+    """Yates-corrected chi-square, 1 df. None if a margin is zero."""
+    denom = t.drug_total * t.other_total * t.event_total * t.non_event_total
+    if denom == 0:
+        return None
+    diff = max(abs(t.a * t.d - t.b * t.c) - t.n / 2, 0)
+    return t.n * diff ** 2 / denom
+
+
+def expected_count(t: TwoByTwo) -> float | None:
+    """E = (a+b)(a+c)/N: reports expected with the drug and event if unrelated."""
+    if t.n == 0:
+        return None
+    return t.drug_total * t.event_total / t.n
+
+
+def information_component(t: TwoByTwo) -> tuple[float | None, float | None]:
+    """IC and its approximate lower 95% limit IC025 (Noren et al. 2013)."""
+    e = expected_count(t)
+    if e is None:
+        return None, None
+    ic = math.log2((t.a + 0.5) / (e + 0.5))
+    ic025 = ic - 3.3 * (t.a + 0.5) ** -0.5 - 2 * (t.a + 0.5) ** -1.5
+    return ic, ic025
+
+
+# ---------------------------------------------------------------------------
+# Rules
+# ---------------------------------------------------------------------------
+
+def evaluate_rules(t: TwoByTwo, p: Estimate, r: Estimate, chi2: float | None,
+                   ic025: float | None, th: Thresholds) -> RulesMet:
+    prr_ok = (p.computable and chi2 is not None
+              and p.value >= th.prr_min and t.a >= th.cases_min and chi2 >= th.chi2_min)
+    ror_ok = r.computable and r.lower > th.ror_lower_min and t.a >= th.cases_min
+    ic_ok = ic025 is not None and ic025 > th.ic025_min
+    return RulesMet(bool(prr_ok), bool(ror_ok), bool(ic_ok))
+
+
+def analyse_table(t: TwoByTwo, th: Thresholds = Thresholds()) -> SignalResult:
+    p, r = prr(t), ror(t)
+    chi2 = chi_square_yates(t)
+    ic, ic025 = information_component(t)
     return SignalResult(
-        a=a, b=b, c=c, d=d,
-        prr=p, prr_lower=pl, prr_upper=pu,
-        ror=r, ror_lower=rl, ror_upper=ru,
-        chi2=chi2, expected=expected_count(a, b, c, d), ic=ic, ic025=ic025,
-        ratio_note=zero_cell_note(a, b, c, d),
-        prr_rule=prr_rule, ror_rule=ror_rule, ic_rule=ic_rule,
-        small_numbers=a < thresholds.small_numbers_below,
+        table=t, prr=p, ror=r, chi2=chi2, ic=ic, ic025=ic025,
+        rules=evaluate_rules(t, p, r, chi2, ic025, th),
+        small_numbers=t.a < config.SMALL_NUMBERS_BELOW,
     )
 
 
+def analyse(drug_event: int, drug_total: int, event_total: int, all_total: int,
+            th: Thresholds = Thresholds()) -> SignalResult:
+    """Full calculation for one drug-event pair from the four openFDA counts."""
+    return analyse_table(two_by_two(drug_event, drug_total, event_total, all_total), th)
+
+
 # ---------------------------------------------------------------------------
-# Plain-language text for the 2x2 detail panel
+# How the rules behave across a whole screen
+# ---------------------------------------------------------------------------
+
+def rule_breakdown(rows: list[dict]) -> dict:
+    """Counts per rule and per number of rules met, for rows with the keys
+    'PRR rule', 'ROR rule', 'IC rule', 'Rules met' and 'Small numbers'.
+    Rows that stopped with an error (key 'Error' set) are left out."""
+    rows = [r for r in rows if not r.get("Error")]
+    n = len(rows)
+    flagged = [r for r in rows if r["Rules met"] > 0]
+    return {
+        "screened": n,
+        "prr": sum(bool(r["PRR rule"]) for r in rows),
+        "ror": sum(bool(r["ROR rule"]) for r in rows),
+        "ic": sum(bool(r["IC rule"]) for r in rows),
+        "met_0": sum(r["Rules met"] == 0 for r in rows),
+        "met_1": sum(r["Rules met"] == 1 for r in rows),
+        "met_2": sum(r["Rules met"] == 2 for r in rows),
+        "met_3": sum(r["Rules met"] == 3 for r in rows),
+        "ic_only": sum(r["Rules met"] == 1 and bool(r["IC rule"]) for r in rows),
+        "flagged_small_numbers": sum(bool(r["Small numbers"]) for r in flagged),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Plain-language helpers (used by the detail panel)
 # ---------------------------------------------------------------------------
 
 def _pct(x: float) -> str:
-    if x == 0:
+    p = 100 * x
+    if p == 0:
         return "0%"
-    if x >= 0.01:
-        return f"{x:.1%}"
-    return f"{x:.2%}" if x >= 0.0001 else "<0.01%"
+    if p >= 10:
+        return f"{p:.0f}%"
+    if p >= 1:
+        return f"{p:.1f}%"
+    return f"{p:.2g}%"
 
 
-def explain(r: SignalResult) -> str:
-    """e.g. 'The event makes up 2.0% of reports for this drug and 0.20% of
-    reports for all other drugs.' plus a note on small numbers / zero cells."""
-    parts = []
-    if r.a + r.b > 0 and r.c + r.d > 0:
-        parts.append(
-            f"The event makes up {_pct(r.a / (r.a + r.b))} of reports for this drug "
-            f"and {_pct(r.c / (r.c + r.d))} of reports for all other drugs."
-        )
-    if _ok(r.expected):
-        parts.append(f"About {r.expected:.1f} reports would be expected if the drug and "
-                     f"event were unrelated; {r.a} were observed.")
-    if r.ratio_note:
-        parts.append(f"PRR and ROR are {r.ratio_note}; no continuity correction is applied.")
-    if r.small_numbers:
-        parts.append(f"Small numbers (a = {r.a}): estimates are unstable.")
-    return " ".join(parts)
+def explain(t: TwoByTwo, event: str) -> str:
+    """'The event makes up 1.6% of reports for this drug and 0.04% for all other drugs.'"""
+    if t.drug_total == 0 or t.other_total == 0:
+        return "Not enough reports to describe the proportions."
+    return (f"{event.capitalize()} makes up {_pct(t.a / t.drug_total)} of reports for this drug "
+            f"({t.a:,} of {t.drug_total:,}) and {_pct(t.c / t.other_total)} of reports for all "
+            f"other drugs ({t.c:,} of {t.other_total:,}).")

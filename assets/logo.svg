@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 40" width="230" height="40">
+  <path d="M4 20 C14 6, 34 6, 44 20 C34 34, 14 34, 4 20 Z" fill="none" stroke="#1F4E79" stroke-width="2.6"/>
+  <circle cx="24" cy="20" r="7.5" fill="#1F4E79"/>
+  <circle cx="24" cy="20" r="2.6" fill="#E0A526"/>
+  <text x="54" y="27" font-family="Public Sans, Segoe UI, Arial, sans-serif" font-size="21" font-weight="700" fill="#18273A">DRISHTI<tspan font-weight="400" fill="#52606D">-lite</tspan></text>
+</svg>

@@ -1,21 +1,22 @@
-"""Small openFDA client with a SQLite cache.
+"""openFDA client with a SQLite cache and an extraction record (spec §3).
 
-Every answer from openFDA is saved in data/openfda_cache.sqlite, so:
-  * the app is fast after the first load,
-  * we stay well under openFDA's rate limits,
-  * results are reproducible while the cache is fresh.
+Every raw answer is cached for 30 days in data/cache.sqlite, so a result can
+be traced back to exactly what openFDA returned. Each client also keeps a log
+of the queries it answered (URL, whether it came from the cache, when it was
+fetched, and openFDA's meta.last_updated), which feeds the extraction record.
 
-Optional: set an OPENFDA_API_KEY environment variable (free key from
-https://open.fda.gov/apis/authentication/) to raise the daily limit
-from 1,000 to 120,000 requests.
+Optional: set OPENFDA_API_KEY (free key: https://open.fda.gov/apis/authentication/)
+to raise the daily limit from 1,000 to 120,000 requests.
 """
+
+from __future__ import annotations
 
 import json
 import os
 import sqlite3
 import subprocess
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -44,11 +45,22 @@ OUTCOMES = {
 
 SEXES = {"Male": "patient.patientsex:1", "Female": "patient.patientsex:2"}
 
+DRUG_FIELD = "patient.drug.openfda.generic_name"
+DRUG_FIELD_EXACT = "patient.drug.openfda.generic_name.exact"
+DRUG_MATCHING_NOTE = (
+    "Phrase match on the harmonised generic name, drug in any role. A phrase match "
+    "also matches salts (e.g. 'ATORVASTATIN CALCIUM') and combination products that "
+    "contain the drug (e.g. 'AMLODIPINE BESYLATE AND ATORVASTATIN CALCIUM'); these are "
+    "included and listed under name_variants. Reports without the harmonised field "
+    "are not matched."
+)
+REACTION_FIELD = "patient.reaction.reactionmeddrapt.exact"
+
 
 @dataclass(frozen=True)
 class Filters:
-    """Report-level filters. Applied to BOTH the drug and the background
-    database, so the 2x2 table always compares like with like."""
+    """Report-level filters, applied to BOTH the drug and the background,
+    so the 2x2 table always compares like with like."""
     serious_only: bool = False
     outcome: str | None = None
     sex: str | None = None
@@ -66,9 +78,8 @@ class Filters:
             parts.append(SEXES[self.sex])
         if self.age_group:
             lo, hi = AGE_GROUPS[self.age_group]
-            # 801 = age reported in years
             parts.append(f"patient.patientonsetage:[{lo}+TO+{hi}]")
-            parts.append("patient.patientonsetageunit:801")
+            parts.append("patient.patientonsetageunit:801")   # 801 = years
         if self.year_from or self.year_to:
             start = f"{self.year_from or 2004}0101"
             end = f"{self.year_to or 2100}1231"
@@ -76,27 +87,59 @@ class Filters:
         return parts
 
 
+# openFDA refuses count queries without a search (403 Forbidden). This clause
+# matches every report (each FAERS report has a safetyreportid), so it is used
+# as the background search when no filters are set. N is computed with it too.
+ALL_REPORTS = "_exists_:safetyreportid"
+
+
+def background_clauses(filters: "Filters") -> list[str]:
+    """Search clauses for the background database: the filters, or all reports."""
+    return filters.clauses() or [ALL_REPORTS]
+
+
 def drug_clause(generic_name: str) -> str:
-    return f'patient.drug.openfda.generic_name:"{generic_name}"'
+    return f'{DRUG_FIELD}:"{generic_name.strip().upper()}"'
 
 
 def reaction_clause(term: str) -> str:
-    return f'patient.reaction.reactionmeddrapt.exact:"{term}"'
+    return f'{REACTION_FIELD}:"{term}"'
+
+
+# FAERS writes apostrophes in MedDRA terms as "^" (e.g. "EWING^S SARCOMA"), which
+# openFDA's search parser rejects. Escaping with a backslash is tried as a fallback.
+SPECIAL_CHARS = '\\^"~*?:/'
+
+
+def escaped_reaction_clause(term: str) -> str:
+    esc = "".join("\\" + ch if ch in SPECIAL_CHARS else ch for ch in term)
+    return f'{REACTION_FIELD}:"{esc}"'
+
+
+class UnsearchableTerm(Exception):
+    """openFDA cannot search for this event term (it rejected the query)."""
+
+
+def date_clause(start_yyyymmdd: str, end_yyyymmdd: str) -> str:
+    return f"receivedate:[{start_yyyymmdd}+TO+{end_yyyymmdd}]"
 
 
 def _encode(clause: str) -> str:
-    # Keep openFDA's own syntax characters; encode everything else (spaces, etc.)
+    # Keep openFDA's own syntax characters; encode everything else.
     return quote(clause, safe=':"[]+.*_')
 
 
-def build_url(search: list[str], count: str | None = None, limit: int = 1) -> str:
+def build_url(search: list[str], count: str | None = None, limit: int = 1,
+              base: str | None = None, sort: str | None = None) -> str:
     params = []
     if search:
         params.append("search=" + "+AND+".join(_encode(c) for c in search))
     if count:
         params.append(f"count={count}")
+    if sort:
+        params.append(f"sort={sort}")
     params.append(f"limit={limit}")
-    return config.OPENFDA_BASE + "?" + "&".join(params)
+    return (base or config.OPENFDA_EVENT) + "?" + "&".join(params)
 
 
 # ---------------------------------------------------------------------------
@@ -104,51 +147,47 @@ def build_url(search: list[str], count: str | None = None, limit: int = 1) -> st
 # ---------------------------------------------------------------------------
 
 class OpenFDAClient:
-    def __init__(self, cache_path: str = config.CACHE_PATH, api_key: str | None = None):
+    def __init__(self, cache_path: str = config.CACHE_PATH, api_key: str | None = None,
+                 force_refresh: bool = False):
         Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(cache_path, check_same_thread=False)
+        self.db = sqlite3.connect(cache_path, check_same_thread=False, timeout=30)
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS cache (url TEXT PRIMARY KEY, body TEXT, fetched_at REAL)"
         )
         self.api_key = api_key or os.environ.get("OPENFDA_API_KEY")
+        self.force_refresh = force_refresh
         self._last_call = 0.0
-        self.live_calls = 0  # how many requests actually went to openFDA
-        self.reset_tracking()
-
-    # -- which answers were used (for the extraction record) -----------------
-    def reset_tracking(self) -> None:
-        """Start counting the answers used by one analysis."""
-        self.answers_used = 0
-        self.answers_from_cache = 0
-        self.oldest_answer_at: float | None = None   # when the oldest answer was fetched
-        self.newest_answer_at: float | None = None
-
-    def _track(self, fetched_at: float, from_cache: bool) -> None:
-        self.answers_used += 1
-        self.answers_from_cache += int(from_cache)
-        self.oldest_answer_at = min(self.oldest_answer_at or fetched_at, fetched_at)
-        self.newest_answer_at = max(self.newest_answer_at or fetched_at, fetched_at)
+        self.query_log: list[dict] = []   # one entry per answered query
 
     # -- cache -------------------------------------------------------------
     def _from_cache(self, url: str) -> tuple[dict, float] | None:
+        if self.force_refresh:
+            return None
         row = self.db.execute("SELECT body, fetched_at FROM cache WHERE url=?", (url,)).fetchone()
         if row and time.time() - row[1] < config.CACHE_DAYS * 86400:
             return json.loads(row[0]), row[1]
         return None
 
-    def _save(self, url: str, body: dict) -> float:
-        now = time.time()
-        self.db.execute("INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (url, json.dumps(body), now))
+    def _save(self, url: str, body: dict, fetched_at: float) -> None:
+        self.db.execute("INSERT OR REPLACE INTO cache VALUES (?, ?, ?)",
+                        (url, json.dumps(body), fetched_at))
         self.db.commit()
-        return now
+
+    def _log(self, url: str, body: dict, from_cache: bool, fetched_at: float) -> None:
+        self.query_log.append({
+            "url": url,
+            "from_cache": from_cache,
+            "fetched_at_utc": datetime.fromtimestamp(fetched_at, timezone.utc).isoformat(timespec="seconds"),
+            "last_updated": body.get("meta", {}).get("last_updated"),
+        })
 
     # -- request -----------------------------------------------------------
     def get(self, url: str) -> dict:
-        """Return the JSON body. A 'no matches' answer becomes {} (not an error)."""
+        """Return the JSON body. openFDA's 'no matches' (404) becomes {}."""
         cached = self._from_cache(url)
         if cached is not None:
             body, fetched_at = cached
-            self._track(fetched_at, from_cache=True)
+            self._log(url, body, True, fetched_at)
             return body
 
         full_url = url + (f"&api_key={self.api_key}" if self.api_key else "")
@@ -157,101 +196,142 @@ class OpenFDAClient:
             if wait > 0:
                 time.sleep(wait)
             self._last_call = time.time()
-            self.live_calls += 1
             resp = requests.get(full_url, timeout=30)
-
-            if resp.status_code == 404:          # openFDA's way of saying "0 results"
+            if resp.status_code == 404:
                 body = {}
                 break
             if resp.status_code in (429, 500, 502, 503, 504):
-                time.sleep(2 ** attempt)         # back off: 1, 2, 4, 8 seconds
+                time.sleep(2 ** attempt)        # back off: 1, 2, 4, 8 s
                 continue
-            resp.raise_for_status()
+            if not resp.ok:
+                # Show openFDA's own explanation, not just the status code.
+                try:
+                    detail = resp.json().get("error", {}).get("message", "")
+                except ValueError:
+                    detail = resp.text[:200]
+                raise requests.HTTPError(
+                    f"openFDA returned {resp.status_code} {resp.reason}"
+                    + (f" ({detail})" if detail else "") + f" for {url}", response=resp)
             body = resp.json()
             break
         else:
-            raise RuntimeError(f"openFDA did not respond after retries: {url}")
+            raise RuntimeError(f"openFDA did not respond after 4 attempts: {url}")
 
-        self._track(self._save(url, body), from_cache=False)
+        now = time.time()
+        self._save(url, body, now)
+        self._log(url, body, False, now)
         return body
 
-    # -- the three kinds of question we ask ---------------------------------
+    # -- the kinds of question we ask ----------------------------------------
     def total(self, search: list[str]) -> int:
         """Number of reports matching the search."""
         body = self.get(build_url(search, limit=1))
         return body.get("meta", {}).get("results", {}).get("total", 0)
 
     def counts(self, search: list[str], field: str, limit: int = 1000) -> dict[str, int]:
-        """Number of reports per value of `field` (max 1000 values)."""
-        body = self.get(build_url(search, count=field, limit=limit))
+        """Number of reports per value of `field` (openFDA returns at most 1,000 values)."""
+        body = self.get(build_url(search, count=field, limit=min(limit, config.TOP_N_MAX)))
         # Text fields come back as {"term", "count"}; date fields as {"time", "count"}.
         return {r.get("term", r.get("time")): r["count"] for r in body.get("results", [])}
+
+    def event_total(self, term: str, other: list[str]) -> int:
+        """Reports with this event (plus the other clauses). Tries the term as is, then
+        escaped; raises UnsearchableTerm if openFDA rejects both (400 Bad Request)."""
+        last = None
+        for clause in (reaction_clause(term), escaped_reaction_clause(term)):
+            try:
+                return self.total([clause] + other)
+            except requests.HTTPError as exc:
+                if exc.response is None or exc.response.status_code != 400:
+                    raise
+                last = exc
+        raise UnsearchableTerm(f"openFDA cannot search for the term '{term}' "
+                               f"(special character); not analysed. {last}")
 
     def last_updated(self) -> str:
         body = self.get(build_url([], limit=1))
         return body.get("meta", {}).get("last_updated", "unknown")
 
+    # -- provenance ----------------------------------------------------------
+    def provenance(self) -> dict:
+        """Summary of the answers used so far (for the extraction record)."""
+        log = self.query_log
+        versions = sorted({q["last_updated"] for q in log if q["last_updated"]})
+        fetched = sorted(q["fetched_at_utc"] for q in log)
+        return {
+            "queries": len(log),
+            "from_cache": sum(q["from_cache"] for q in log),
+            "live": sum(not q["from_cache"] for q in log),
+            "oldest_answer_fetched_utc": fetched[0] if fetched else None,
+            "newest_answer_fetched_utc": fetched[-1] if fetched else None,
+            "openfda_last_updated_values": versions,
+            "mixed_data_versions": len(versions) > 1,
+        }
+
 
 # ---------------------------------------------------------------------------
-# Extraction record (spec section 3)
+# Extraction record (spec §3)
 # ---------------------------------------------------------------------------
-
-DRUG_MATCH_FIELD = "patient.drug.openfda.generic_name"
-
-
-def _utc(ts: float | None) -> str | None:
-    return None if ts is None else datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="seconds")
-
 
 def app_version() -> str:
-    """Config version plus the git commit, if git is available."""
     try:
-        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
-                                text=True, timeout=5, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
-                               capture_output=True, text=True, timeout=5).stdout.strip()
-        return f"{config.APP_VERSION} (commit {commit}{', uncommitted changes' if dirty else ''})"
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                             text=True, timeout=3, check=True).stdout.strip()
+        return f"{config.APP_VERSION} (git {sha})" if sha else config.APP_VERSION
     except Exception:
         return config.APP_VERSION
 
 
-def extraction_record(client: "OpenFDAClient", generic_name: str, filters: Filters,
-                      top_n: int, reactions_analysed: int, totals: dict,
-                      thresholds: dict, dme_version: str,
-                      label_set_id: str | None = None,
-                      label_effective_date: str | None = None) -> dict:
-    """Everything needed to trace a result back to what openFDA returned.
+@dataclass
+class ExtractionRecord:
+    extraction_id: str
+    extraction_datetime: str
+    openfda_last_updated: str
+    query_parameters: dict
+    dme_list_version: str
+    app_version: str
+    label_set_id: str | None = None          # filled in Phase 2 (label check)
+    label_effective_date: str | None = None
+    data_provenance: dict = field(default_factory=dict)
+    name_variants: dict = field(default_factory=dict)    # generic-name strings matched -> reports
+    rule_breakdown: dict = field(default_factory=dict)
+    count_checks: list[dict] = field(default_factory=list)
+    queries: list[dict] = field(default_factory=list)
 
-    Call client.reset_tracking() before the analysis and this right after it.
-    """
-    now = datetime.now(timezone.utc)
-    return {
-        "extraction_id": f"EXT-{now:%Y%m%dT%H%M%SZ}-{generic_name.replace(' ', '_')}",
-        "extraction_datetime": now.isoformat(timespec="seconds"),
-        "openfda_last_updated": client.last_updated(),
-        "query_parameters": {
-            "drug_match_field": DRUG_MATCH_FIELD,
-            "generic_name": generic_name,
-            "drug_roles_counted": "any (suspect, concomitant, interacting)",
-            "filters": asdict(filters),
-            "filter_clauses": filters.clauses(),
-            "top_n_reactions": top_n,
-            "thresholds": thresholds,
-        },
-        "counts": {
-            "drug_reports_matched": totals.get("drug_reports"),
-            "database_reports_filtered": totals.get("all_reports"),
-            "reactions_analysed": reactions_analysed,
-        },
-        "api_answers": {
-            "used": client.answers_used,
-            "from_cache": client.answers_from_cache,
-            "oldest_fetched_at": _utc(client.oldest_answer_at),
-            "newest_fetched_at": _utc(client.newest_answer_at),
-            "cache_days": config.CACHE_DAYS,
-        },
-        "label_set_id": label_set_id,
-        "label_effective_date": label_effective_date,
-        "dme_list_version": dme_version,
-        "app_version": app_version(),
-    }
+    @classmethod
+    def create(cls, client: OpenFDAClient, query_parameters: dict, dme_list_version: str
+               ) -> "ExtractionRecord":
+        now = datetime.now(timezone.utc)
+        prov = client.provenance()
+        versions = prov["openfda_last_updated_values"]
+        if len(versions) == 1:
+            last_updated = versions[0]
+        elif versions:
+            last_updated = "MIXED: " + ", ".join(versions)
+        else:
+            last_updated = "unknown"
+        return cls(
+            extraction_id="EXT-" + now.strftime("%Y%m%d-%H%M%S"),
+            extraction_datetime=now.isoformat(timespec="seconds"),
+            openfda_last_updated=last_updated,
+            query_parameters=query_parameters,
+            dme_list_version=dme_list_version,
+            app_version=app_version(),
+            data_provenance=prov,
+            queries=list(client.query_log),
+        )
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def summary(self) -> dict:
+        """The record without the long per-query list (for display)."""
+        d = self.to_dict()
+        d.pop("queries")
+        return d
+
+    def save(self, folder: str = config.EXTRACTIONS_DIR) -> Path:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        path = Path(folder) / f"{self.extraction_id}.json"
+        path.write_text(json.dumps(self.to_dict(), indent=2))
+        return path

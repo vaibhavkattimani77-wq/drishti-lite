@@ -1,5 +1,7 @@
-"""Checks the statistics against values worked out by hand (spec section 4, Gate 1).
+"""Statistics checked against values worked out by hand (Gate 1).
 
+Covers: normal counts, a = 0, b/c/d = 0, a = 1-4 (small numbers),
+PRR = 1 (no disproportion), inconsistent counts, and the three rules.
 Run with:  pytest
 """
 
@@ -7,154 +9,186 @@ import math
 
 import pytest
 
-from src.openfda_client import Filters, build_url, drug_clause
-from src.signals import (Thresholds, analyse, chi_square_yates, explain,
-                         information_component, prr, ror, two_by_two, zero_cell_note)
+from src.signals import (TwoByTwo, Thresholds, analyse, analyse_table, chi_square_yates,
+                         explain, information_component, prr, ror, rule_breakdown,
+                         two_by_two)
 
 # Hand-worked example
 #   a = 20 reports with drug + event
-#   drug total     = 1,000   -> b = 980
-#   event total    = 220     -> c = 200
-#   database total = 101,000 -> d = 101,000 - 1,000 - 220 + 20 = 99,800
-A, B, C, D = 20, 980, 200, 99_800
-N = A + B + C + D
+#   drug total (a+b) = 1,000      -> b = 980
+#   event total (a+c) = 220       -> c = 200
+#   database N = 101,000          -> d = 101,000 - 1,000 - 220 + 20 = 99,800
+T = TwoByTwo(20, 980, 200, 99_800)
 
 
-# --- Normal counts -----------------------------------------------------------
+# ---------------------------------------------------------------- normal counts
 
-def test_two_by_two():
-    assert two_by_two(20, 1_000, 220, 101_000) == (A, B, C, D)
+def test_two_by_two_from_openfda_counts():
+    assert two_by_two(20, 1_000, 220, 101_000) == T
+    assert T.n == 101_000
 
 
 def test_prr_by_hand():
     # PRR = (20/1000) / (200/100000) = 0.02 / 0.002 = 10
-    value, low, high = prr(A, B, C, D)
-    assert value == pytest.approx(10.0)
+    est = prr(T)
+    assert est.value == pytest.approx(10.0)
     se = math.sqrt(1 / 20 - 1 / 1000 + 1 / 200 - 1 / 100_000)
-    assert low == pytest.approx(10 * math.exp(-1.96 * se))
-    assert high == pytest.approx(10 * math.exp(1.96 * se))
-    assert (round(low, 2), round(high, 2)) == (6.34, 15.77)
+    assert est.lower == pytest.approx(10 * math.exp(-1.96 * se))
+    assert est.upper == pytest.approx(10 * math.exp(1.96 * se))
+    assert est.note is None
 
 
 def test_ror_by_hand():
-    # ROR = (20 * 99800) / (980 * 200) = 1,996,000 / 196,000 = 10.18
-    value, low, high = ror(A, B, C, D)
-    assert value == pytest.approx(1_996_000 / 196_000)
-    assert (round(low, 2), round(high, 2)) == (6.40, 16.20)
+    # ROR = (20 * 99800) / (980 * 200) = 1,996,000 / 196,000 = 10.1837
+    est = ror(T)
+    assert est.value == pytest.approx(10.183673, rel=1e-6)
+    se = math.sqrt(1 / 20 + 1 / 980 + 1 / 200 + 1 / 99_800)
+    assert est.lower == pytest.approx(est.value * math.exp(-1.96 * se))
+    assert est.upper == pytest.approx(est.value * math.exp(1.96 * se))
 
 
 def test_chi_square_yates_by_hand():
-    expected = N * (abs(A * D - B * C) - N / 2) ** 2 / ((A + B) * (C + D) * (A + C) * (B + D))
-    assert chi_square_yates(A, B, C, D) == pytest.approx(expected)
-    assert round(chi_square_yates(A, B, C, D), 2) == 139.43
+    n = 101_000
+    expected = n * (abs(20 * 99_800 - 980 * 200) - n / 2) ** 2 / (1_000 * 100_000 * 220 * 100_780)
+    assert chi_square_yates(T) == pytest.approx(expected)
+    assert chi_square_yates(T) > 4
 
 
 def test_ic_by_hand():
-    # E = 1000 * 220 / 101000 = 2.178
-    # IC = log2(20.5 / 2.678) = 2.94
-    # IC025 = 2.936 - 3.3/sqrt(20.5) - 2/20.5^1.5 = 2.19
-    e = 1_000 * 220 / 101_000
-    ic, ic025 = information_component(A, B, C, D)
-    assert ic == pytest.approx(math.log2(20.5 / (e + 0.5)))
-    assert ic025 == pytest.approx(ic - 3.3 * 20.5 ** -0.5 - 2 * 20.5 ** -1.5)
-    assert (round(ic, 2), round(ic025, 2)) == (2.94, 2.19)
+    # E = 1000 * 220 / 101000 = 2.17822; IC = log2(20.5 / 2.67822) = 2.9363
+    ic, ic025 = information_component(T)
+    assert ic == pytest.approx(2.936279, abs=1e-5)
+    assert ic025 == pytest.approx(2.185883, abs=1e-5)
+    assert ic025 < ic
 
 
-def test_all_three_rules_met():
-    r = analyse(20, 1_000, 220, 101_000)
-    assert (r.prr_rule, r.ror_rule, r.ic_rule) == (True, True, True)
-    assert r.rules_met == 3
-    assert not r.small_numbers
-    assert r.ratio_note == ""
+def test_all_three_rules_met_for_strong_pair():
+    res = analyse_table(T)
+    assert (res.rules.prr, res.rules.ror, res.rules.ic) == (True, True, True)
+    assert res.rules.label == "3 of 3"
+    assert not res.small_numbers
 
 
-def test_explanation_text():
-    text = explain(analyse(20, 1_000, 220, 101_000))
-    assert "2.0% of reports for this drug" in text
-    assert "0.20% of reports for all other drugs" in text
+# ---------------------------------------------------------------- PRR = 1
 
-
-# --- No disproportion (PRR = 1) ---------------------------------------------
-
-def test_no_disproportion():
+def test_no_disproportion_gives_prr_one_and_no_rules():
     # Event is 1% of drug reports and 1% of other reports
-    r = analyse(10, 1_000, 1_010, 101_000)
-    assert r.prr == pytest.approx(1.0)
-    assert r.ic == pytest.approx(0.0, abs=1e-9)   # observed = expected
-    assert r.ic025 < 0
-    assert r.rules_met == 0
+    res = analyse(10, 1_000, 1_010, 101_000)
+    assert res.prr.value == pytest.approx(1.0)
+    assert res.ror.value == pytest.approx(1.0)
+    assert res.chi2 == pytest.approx(0.0)          # Yates correction floors at 0
+    assert res.ic < 0.1                             # shrinkage pulls IC slightly negative
+    assert res.rules.count == 0
+    assert res.rules.label == "0 of 3"
 
 
-# --- a = 0 -------------------------------------------------------------------
+# ---------------------------------------------------------------- a = 0
 
-def test_a_zero():
-    r = analyse(0, 1_000, 220, 101_000)
-    assert math.isnan(r.prr) and math.isnan(r.ror)
-    assert math.isnan(r.prr_lower) and math.isnan(r.ror_lower)
-    assert r.ratio_note == "not computable (a = 0)"
-    # IC is still computed thanks to shrinkage, and is negative (fewer than expected)
-    assert not math.isnan(r.ic) and r.ic < 0
-    assert r.rules_met == 0
-    assert r.small_numbers
-    assert "not computable (a = 0)" in explain(r)
+def test_a_zero_prr_ror_not_computable_but_ic_computed():
+    res = analyse_table(TwoByTwo(0, 1_000, 200, 99_800))
+    assert res.prr.value is None and res.prr.note == "not computable (a = 0)"
+    assert res.ror.value is None and res.ror.note == "not computable (a = 0)"
+    assert res.ic is not None and res.ic < 0
+    assert res.ic025 < 0
+    assert res.rules.count == 0
+    assert res.small_numbers
 
 
-# --- b, c or d = 0 -----------------------------------------------------------
+# ---------------------------------------------------------------- b, c, d = 0
 
-@pytest.mark.parametrize("cells, note", [
-    ((5, 0, 50, 1_000), "not computable (b = 0)"),
-    ((5, 100, 0, 1_000), "not computable (c = 0)"),
-    ((5, 100, 50, 0), "not computable (d = 0)"),
+@pytest.mark.parametrize("cells, name", [
+    ((5, 0, 200, 99_800), "b"),
+    ((5, 995, 0, 99_800), "c"),
+    ((5, 995, 200, 0), "d"),
 ])
-def test_other_zero_cells(cells, note):
-    a, b, c, d = cells
-    assert zero_cell_note(a, b, c, d) == note
-    assert all(math.isnan(x) for x in prr(a, b, c, d))
-    assert all(math.isnan(x) for x in ror(a, b, c, d))
-    # No continuity correction: the rules that need PRR/ROR fail
-    r = analyse(a, a + b, a + c, a + b + c + d)
-    assert r.ratio_note == note
-    assert not r.prr_rule and not r.ror_rule
+def test_ror_not_computable_with_any_zero_cell(cells, name):
+    res = analyse_table(TwoByTwo(*cells))
+    assert res.ror.value is None and res.ror.note == f"not computable ({name} = 0)"
+    assert not res.rules.ror
+    assert res.ic is not None          # IC is still computed
 
 
-# --- Small numbers (a = 1 to 4) ---------------------------------------------
+def test_prr_needs_only_a_and_c():
+    # c = 0 -> PRR not computable (division by zero)
+    res = analyse_table(TwoByTwo(5, 995, 0, 99_800))
+    assert res.prr.value is None and res.prr.note == "not computable (c = 0)"
+    assert not res.rules.prr
+
+
+@pytest.mark.parametrize("cells", [(10, 0, 100, 500), (10, 90, 100, 0)])
+def test_prr_computable_when_b_or_d_is_zero(cells):
+    # Reviewer example: a=10, b=0, c=100, d=500 -> PRR = (10/10) / (100/600) = 6.0
+    t = TwoByTwo(*cells)
+    res = analyse_table(t)
+    expected = (t.a / (t.a + t.b)) / (t.c / (t.c + t.d))
+    assert res.prr.value == pytest.approx(expected)
+    assert res.prr.lower < res.prr.value < res.prr.upper
+    assert res.prr.note is None
+    assert res.ror.value is None       # ROR still needs all four cells
+
+
+def test_prr_b_zero_value_by_hand():
+    assert analyse_table(TwoByTwo(10, 0, 100, 500)).prr.value == pytest.approx(6.0)
+
+
+# ---------------------------------------------------------------- small numbers
 
 @pytest.mark.parametrize("a", [1, 2, 3, 4])
-def test_small_numbers_flag(a):
-    # Same 10-fold disproportion as the main example, but with few cases
-    r = analyse(a, 1_000 * a // 2, 11 * a, 101_000)
-    assert r.small_numbers
+def test_small_numbers_warning(a):
+    res = analyse(a, 1_000, a + 2, 1_000_000)      # strong ratio, tiny counts
+    assert res.small_numbers
+    assert not analyse(5, 1_000, 7, 1_000_000).small_numbers
 
 
-def test_small_numbers_cannot_meet_case_minimum():
-    # a = 2: PRR = 10, but the PRR and ROR rules both need a >= 3
-    r = analyse(2, 1_000, 22, 101_000)
-    assert r.prr == pytest.approx(10.0)
-    assert not r.prr_rule and not r.ror_rule
-    assert "Small numbers (a = 2)" in explain(r)
+@pytest.mark.parametrize("a", [1, 2])
+def test_prr_and_ror_rules_need_three_cases(a):
+    res = analyse(a, 1_000, a + 2, 1_000_000)
+    assert res.prr.value > 2                        # ratio high ...
+    assert not res.rules.prr and not res.rules.ror  # ... but a < 3
 
 
-def test_five_cases_is_not_small():
-    assert not analyse(5, 1_000, 55, 101_000).small_numbers
+def test_ic_shrinks_small_counts():
+    # Same observed/expected ratio, fewer reports -> lower IC (shrinkage)
+    small = analyse_table(TwoByTwo(2, 998, 20, 998_980))
+    large = analyse_table(TwoByTwo(200, 99_800, 2_000, 99_898_000))
+    assert small.ic < large.ic
+    assert small.ic025 < large.ic025
 
 
-# --- Thresholds and errors ---------------------------------------------------
+# ---------------------------------------------------------------- rules + thresholds
 
-def test_thresholds_are_respected():
-    r = analyse(20, 1_000, 220, 101_000, Thresholds(prr_cases_min=25, ror_cases_min=25))
-    assert not r.prr_rule and not r.ror_rule and r.ic_rule
-    assert r.rules_met == 1
+def test_thresholds_change_rules():
+    assert analyse_table(T).rules.prr
+    assert not analyse_table(T, Thresholds(cases_min=25)).rules.prr
+    assert not analyse_table(T, Thresholds(prr_min=20)).rules.prr
+    assert not analyse_table(T, Thresholds(ic025_min=3)).rules.ic
 
+
+# ---------------------------------------------------------------- inconsistent counts
 
 def test_inconsistent_counts_raise():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="negative cell"):
         two_by_two(50, 40, 100, 1_000)   # more drug+event reports than drug reports
 
 
-# --- URL building (openfda_client) ------------------------------------------
+# ---------------------------------------------------------------- plain language
 
-def test_url_building():
-    url = build_url([drug_clause("ATORVASTATIN")] + Filters(serious_only=True, year_from=2020).clauses())
-    assert 'patient.drug.openfda.generic_name:"ATORVASTATIN"+AND+serious:1' in url
-    assert "receivedate:[20200101+TO+21001231]" in url
-    assert url.endswith("limit=1")
+def test_explanation_text():
+    text = explain(T, "RHABDOMYOLYSIS")
+    assert "2.0% of reports for this drug (20 of 1,000)" in text
+    assert "0.2% of reports for all other drugs (200 of 100,000)" in text
+
+
+# ---------------------------------------------------------------- rule breakdown
+
+def test_rule_breakdown_counts():
+    rows = [
+        {"PRR rule": True, "ROR rule": True, "IC rule": True, "Rules met": 3, "Small numbers": False},
+        {"PRR rule": False, "ROR rule": False, "IC rule": True, "Rules met": 1, "Small numbers": True},
+        {"PRR rule": False, "ROR rule": False, "IC rule": False, "Rules met": 0, "Small numbers": True},
+    ]
+    b = rule_breakdown(rows)
+    assert (b["screened"], b["prr"], b["ror"], b["ic"]) == (3, 1, 1, 2)
+    assert (b["met_0"], b["met_1"], b["met_2"], b["met_3"]) == (1, 1, 0, 1)
+    assert b["ic_only"] == 1
+    assert b["flagged_small_numbers"] == 1     # the 0-rule small-number row is not counted

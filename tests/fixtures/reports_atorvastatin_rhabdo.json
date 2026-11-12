@@ -1,0 +1,44 @@
+{
+  "meta": {"last_updated": "2026-10-28", "results": {"skip": 0, "limit": 3, "total": 2278}},
+  "results": [
+    {
+      "safetyreportid": "20001", "receivedate": "20260901", "serious": "1",
+      "seriousnesshospitalization": "1", "occurcountry": "US",
+      "primarysource": {"qualification": "1", "reportercountry": "US"},
+      "patient": {
+        "patientonsetage": "67", "patientonsetageunit": "801", "patientsex": "2",
+        "reaction": [{"reactionmeddrapt": "Rhabdomyolysis", "reactionoutcome": "1"},
+                     {"reactionmeddrapt": "Acute kidney injury", "reactionoutcome": "2"}],
+        "drug": [
+          {"medicinalproduct": "LIPITOR", "drugcharacterization": "1", "drugindication": "HYPERCHOLESTEROLAEMIA",
+           "actiondrug": "1", "openfda": {"generic_name": ["ATORVASTATIN CALCIUM"]}},
+          {"medicinalproduct": "CLARITHROMYCIN", "drugcharacterization": "1",
+           "openfda": {"generic_name": ["CLARITHROMYCIN"]}},
+          {"medicinalproduct": "ASPIRIN", "drugcharacterization": "2"}
+        ]
+      }
+    },
+    {
+      "safetyreportid": "20002", "receivedate": "20260815", "serious": "1",
+      "seriousnessdeath": "1", "seriousnesshospitalization": "1",
+      "primarysource": {"qualification": "5", "reportercountry": "GB"},
+      "patient": {
+        "patientonsetage": "8", "patientonsetageunit": "800",
+        "reaction": [{"reactionmeddrapt": "Rhabdomyolysis", "reactionoutcome": "5"}],
+        "drug": [
+          {"medicinalproduct": "ATORVASTATIN", "drugcharacterization": "2", "drugindication": "HYPERLIPIDAEMIA",
+           "drugrecurreadministration": "1", "openfda": {"generic_name": ["ATORVASTATIN CALCIUM"]}},
+          {"medicinalproduct": "COLCHICINE", "drugcharacterization": "1"}
+        ]
+      }
+    },
+    {
+      "safetyreportid": "20003", "receivedate": "20260710", "serious": "2",
+      "patient": {
+        "reaction": [{"reactionmeddrapt": "Rhabdomyolysis"}],
+        "drug": [{"medicinalproduct": "ATORVASTATIN CALCIUM", "drugcharacterization": "1",
+                  "actiondrug": "2", "openfda": {"generic_name": ["ATORVASTATIN CALCIUM"]}}]
+      }
+    }
+  ]
+}

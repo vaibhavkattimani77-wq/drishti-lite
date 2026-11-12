@@ -1,19 +1,17 @@
-"""Checks the EMA DME list file and matching."""
+"""EMA DME list loads with its version and matches FAERS PTs case-insensitively."""
 
-from src.dme import dme_list_version, dme_terms, is_dme
-
-
-def test_list_has_62_unique_terms():
-    assert len(dme_terms()) == 62
+from src.dme import load_dme
 
 
-def test_matching_is_case_insensitive():
-    assert is_dme("RHABDOMYOLYSIS")            # FAERS style
-    assert is_dme("Stevens-Johnson syndrome")  # EMA style
-    assert is_dme("REYE'S SYNDROME")
-    assert not is_dme("NAUSEA")
-    assert not is_dme("RHABDO")                # exact match only
+def test_dme_list_loads_62_terms_with_version():
+    dme = load_dme()
+    assert len(dme) == 62
+    assert "EMA/326038/2020" in dme.version
 
 
-def test_version_string():
-    assert dme_list_version() == "EMA DME list, EMA/326038/2020, dated 15 June 2020"
+def test_case_insensitive_exact_match():
+    dme = load_dme()
+    assert dme.contains("RHABDOMYOLYSIS")
+    assert dme.contains("Stevens-Johnson syndrome")
+    assert not dme.contains("RHABDO")            # exact, not partial
+    assert not dme.contains("NAUSEA")

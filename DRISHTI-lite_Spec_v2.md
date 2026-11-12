@@ -2,7 +2,8 @@
 
 *A pharmacovigilance research prototype for FAERS signal detection, triage and case review.*
 Replaces DRISHTI_Spec_v1.md and DRISHTI_Blueprint.md (full version, now out of scope).
-Status: **DRAFT v2.** Read it, change it if needed, then lock it.
+Status: **v2.1** (3 Nov 2026). Changes from v2 after external review: PRR zero-cell rule, trend labels,
+rule non-independence note, drug-name variants, count check. See the change log at the end.
 
 ---
 
@@ -102,7 +103,8 @@ transparent large-scale pattern discovery.* Stat Methods Med Res 2013;22(1):57�
 | Situation | Handling |
 |---|---|
 | a = 0 | PRR/ROR "not computable (a = 0)"; IC still computed (shrinkage) |
-| b, c or d = 0 | PRR/ROR "not computable (<cell> = 0)"; **no continuity correction** (stated on the Method page) |
+| c = 0 | PRR "not computable (c = 0)" |
+| b, c or d = 0 | ROR "not computable (<cell> = 0)"; PRR is still computed when only b or d is 0; **no continuity correction** (stated on the Method page) |
 | a < 5 | **Small-numbers warning** shown on the row and in the detail panel |
 | Missing case fields | Shown as "not reported", never counted as "no" |
 
@@ -119,8 +121,9 @@ transparent large-scale pattern discovery.* Stat Methods Med Res 2013;22(1):57�
 
 ### 4.5 Trend
 - Reports per calendar quarter by FDA receipt date; the **current incomplete quarter is excluded**.
-- Rising: last 4 complete quarters ≥ 1.5 × previous 4, **and** ≥ 3 reports in the last 4.
-- Falling: ratio ≤ 0.67. Fewer than 6 reports across the 8 quarters → "Insufficient data".
+- "Increasing reporting": last 4 complete quarters ≥ 1.5 × previous 4, **and** ≥ 3 reports in the last 4.
+- "Decreasing reporting": ratio ≤ 0.67. Otherwise "No substantial change". Fewer than 6 reports across the 8 quarters → "Insufficient data".
+- The labels describe reporting volume, not risk.
 - Note: changes in reporting often reflect stimulated reporting, not changes in risk.
 
 ### 4.6 Multiple testing
@@ -158,7 +161,7 @@ the limitations and on the Detection screen.
   | ≥ 1 report with fatal outcome | +2 | Report-level death; not necessarily caused by the event |
   | > 50% of reports serious | +1 | Seriousness pattern |
   | Rules met 3/3 (+2) or 2/3 (+1) | 0–2 | Consistency across predefined rules |
-  | Rising trend | +1 | Possible emerging pattern |
+  | Increasing reporting | +1 | Possible emerging pattern |
   Maximum 10 · **Higher ≥ 7 · Medium 4–6 · Lower ≤ 3.** Each factor is shown with its points and evidence. The weights are a documented design choice, not a validated model.
 
 ### Screen 3: Case review
@@ -320,3 +323,18 @@ Claude writes most of the code. You:
 - Check report fields against the raw JSON.
 - Write the rationales and limitations in your own words.
 - Test every gate in the browser.
+
+---
+
+## Change log
+
+**v2.1 (3 Nov 2026)**, after an external review:
+- §4.3: PRR needs only a > 0 and c > 0; it is computed when b or d is 0. ROR still needs all four cells.
+- §4.4: on-screen note that the three rules share one 2×2 table and are not independent confirmations.
+  A per-screen breakdown shows how many pairs meet each rule and 0–3 rules.
+- §4.5: trend labels renamed to describe reporting volume (Increasing / Decreasing reporting, No substantial change).
+- §3: the generic-name strings matched (salts, combination products) are listed per screen and saved
+  in the extraction record. Combination products are included.
+- §3: count check: a and a+c for three events are re-fetched by direct search and must match (saved in the record).
+- Out of scope, listed as future work: comparator sensitivity analyses (same class, suspect-only),
+  brand-name mapping, exact Bayesian IC025.

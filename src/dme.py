@@ -1,10 +1,13 @@
-"""EMA Designated Medical Event (DME) list: loading, matching and version.
+"""EMA Designated Medical Event (DME) list: loading and matching.
 
-Matching is case-insensitive exact match on the MedDRA PT (FAERS returns PTs in
-upper case; the EMA file uses normal case). See data/ema_dme_list_VERSION.txt.
+The list is a safety net: events on it deserve attention irrespective of the
+statistics. Serious is not the same as DME; many serious events are not on it.
+Matching is case-insensitive exact match on the MedDRA Preferred Term.
 """
 
-from functools import lru_cache
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -12,19 +15,27 @@ import pandas as pd
 from src import config
 
 
-@lru_cache(maxsize=1)
-def dme_terms(path: str = config.DME_LIST_PATH) -> frozenset[str]:
-    """The DME PTs, upper-cased for matching."""
-    return frozenset(pd.read_csv(path)["pt"].str.strip().str.upper())
+@dataclass(frozen=True)
+class DMEList:
+    terms: frozenset[str]          # upper-case PTs
+    version: str
+
+    def contains(self, pt: str) -> bool:
+        return pt.strip().upper() in self.terms
+
+    def __len__(self) -> int:
+        return len(self.terms)
 
 
-def is_dme(pt: str) -> bool:
-    return pt.strip().upper() in dme_terms()
+def _version_line(path: str) -> str:
+    """Short version label, e.g. 'EMA DME list, EMA/326038/2020 (15 June 2020), 62 PTs'."""
+    text = Path(path).read_text(encoding="utf-8")
+    doc = next((ln.split(":", 1)[1].strip() for ln in text.splitlines()
+                if ln.lower().startswith("document:")), "version not recorded")
+    return f"EMA DME list, {doc}"
 
 
-def dme_list_version(path: str = config.DME_VERSION_PATH) -> str:
-    """e.g. 'EMA DME list, EMA/326038/2020, dated 15 June 2020'."""
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
-        if line.startswith("Document:"):
-            return "EMA DME list, " + line.split(":", 1)[1].split(" (")[0].strip()
-    return "EMA DME list, version not recorded"
+def load_dme(csv_path: str = config.DME_CSV, version_path: str = config.DME_VERSION_TXT) -> DMEList:
+    df = pd.read_csv(csv_path)
+    terms = frozenset(df["pt"].astype(str).str.strip().str.upper())
+    return DMEList(terms, f"{_version_line(version_path)}, {len(terms)} PTs")
