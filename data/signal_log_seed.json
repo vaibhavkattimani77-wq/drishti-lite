@@ -888,6 +888,13 @@
             "confounding": null
           }
         }
+      },
+      {
+        "decision": "Refuted",
+        "rationale": "Correction to the previous decision. Agranulocytosis is a known, labelled risk of clozapine: the US label carries a boxed warning for severe neutropenia with mandatory blood count monitoring. The text-based label check missed it because the label uses \u201csevere neutropenia\u201d rather than the MedDRA term \u201cagranulocytosis\u201d (synonym miss). Disproportionate reporting is expected for a known, closely monitored risk. No new safety information; refuted as a new signal.",
+        "reviewer": "vaibhav",
+        "decision_date": "2026-11-15T10:44:05+00:00",
+        "evidence": {}
       }
     ]
   }
