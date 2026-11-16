@@ -15,7 +15,7 @@ GVP Module IX (signal management).
 *Drishti* means *sight* in Sanskrit: the aim is to help a reviewer see patterns in safety reports
 without mistaking them for proof.
 
-**Live app:** _(add the Streamlit link here after deployment)_
+**Live app:** _https://drishti-lite.streamlit.app/_
 
 ---
 
